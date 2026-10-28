@@ -1,0 +1,393 @@
+DETOUR - BUILD BRIEF
+====================
+Competition:  Airwallex Agentic Banking Hackathon (online, HackerEarth)
+              https://airwallex.hackerearth.com/
+              Builder guide: https://airwallexdev.com/guide
+Dates:        (rechecked on the HackerEarth page 25 Oct 2026, no timezones
+              given) Applications close 25 Oct. Accepted teams notified and
+              build starts 27 Oct. Submissions due 13 Nov. Finalists 15 Nov.
+              Demo Day 19 Nov, San Francisco, remote optional.
+              Clashes with Zecathon (Hypothec) closing 28 Oct.
+Prizes:       Cash we can win: Founder's Choice $30,000, Judges' Choice
+              $20,000 (open categories). Visa / Metal $15k each need
+              their own tooling - not targeted. Rest is credits.
+Field:        1.6K registrations (16 Oct).
+Written:      16 Oct 2026
+
+Name: a detour is the unplanned turn a trip takes. Detour is the money
+that follows the traveller when that happens.
+
+------------------------------------------------------------------------
+0. RESUME HERE (updated 19 Oct 2026)
+------------------------------------------------------------------------
+Done:
+  - Idea chosen and checked against the user's hackathon rules.
+  - Sandbox capabilities checked from docs (section 3).
+  - Sandbox account created; scoped API key saved in ./.env
+    (AIRWALLEX_CLIENT_ID, AIRWALLEX_API_KEY). Never print or commit it;
+    .gitignore excludes .env.
+    Scopes: Issuing Cardholders W, Cards W, Authorizations+Transactions R,
+    Simulations W, Core Balances R, Transactional FX Conversion W,
+    Issuing Config R. No IP whitelist.
+Update 19 Oct: sandbox_check.mjs written and run. Card creation is
+  BLOCKED at account level ("Invalid issuance details") - see section 3
+  "LIVE SANDBOX RUN". Wallet is pre-funded; cardholders work.
+  19 Oct later: APPLIED on HackerEarth, and EMAILED devhelp@airwallex.com
+  asking for a COMMERCIAL virtual card program on the sandbox account.
+  Waiting on their reply. When cards work: node sandbox_check.mjs
+  If cards are still blocked on 27 Oct (build start, after acceptance
+  email): see section 11 (fallback C).
+  New next steps (A and B done 19 Oct):
+  A. In the sandbox web app check Issuing is on; try making a virtual
+     card by hand. If that fails, email devhelp@airwallex.com (text in
+     section 3). Then rerun: node sandbox_check.mjs
+  B. Apply on HackerEarth before 23 Oct anyway (step 3 below).
+Next (original):
+  1. Write a small test script (sandbox base https://api.sandbox.airwallex.com)
+     that runs the section 3 "NOT YET CONFIRMED" checks:
+       a. create cardholder + EUR virtual card, MCC allowlist 5812/4121
+       b. simulate 5812 auth (expect approve) and 5732 auth (expect decline)
+       c. simulate an auth outside active_from/active_to (expect decline)
+       d. EUR card spending from a USD wallet (auto-FX or not)
+     First fund the wallet with the deposit simulation if balance is 0.
+     If card calls fail, check Issuing is enabled in the sandbox web app.
+  2. Write the results into section 3 and update the VERDICT.
+  3. Apply on HackerEarth before 23 Oct with section 10's text; email
+     support@hackerearth.com: must we pick a kit? pre-existing code OK?
+Webhooks test (optional, later): needs a public URL set in the web app
+under Developer -> Webhooks.
+
+
+There is ONE product in this brief: an agent that funds stranded
+travellers with a virtual card and adjusts it as the disruption changes.
+If a session finds itself building a booking tool, a rebooking engine, an
+expense app or an invoice/AP agent, stop and re-read section 1.
+
+
+------------------------------------------------------------------------
+1. WHAT WE ARE BUILDING
+------------------------------------------------------------------------
+A company's employee is travelling. Their flight is cancelled or badly
+delayed. Detour notices, and within a minute the employee has a virtual
+card in the local currency that works only for food, a hotel and taxis,
+holds the right amount for that city, and expires when they get home.
+As the disruption changes, Detour changes the card.
+
+Lifecycle of one disruption:
+  1. Watch     Trip on file (flights, traveller, home currency). Flight
+               status feed + airline notification emails.
+  2. Detect    Cancelled, or delay past threshold, or missed connection.
+  3. Fund      Issue a virtual card: meals + taxis, city-rate limits,
+               active until the rebooked departure + 6h.
+  4. Adapt     Delay becomes overnight -> add hotel categories, raise the
+               limit. Rebooked -> move the expiry. Employee asks for more
+               ("hotel wants a 150 EUR deposit") -> policy check -> raise
+               or escalate.
+  5. Escalate  Anything past policy (2nd night, rate above cap) goes to a
+               travel manager with the amount, currency, merchant type and
+               evidence bound to the approval.
+  6. Close     Employee lands -> card set INACTIVE then CLOSED. Spend
+               summary from card transactions (no receipts). EU261 claim
+               pack drafted where it applies.
+
+One-line pitch:
+  Today a stranded employee pays out of pocket and waits weeks to be
+  repaid. With Detour the money is there before they have to ask, and it
+  can only be spent on getting them home.
+
+
+------------------------------------------------------------------------
+2. THE PROBLEM (plain words)
+------------------------------------------------------------------------
+- A cancelled flight at 11pm leaves the traveller paying for a hotel,
+  food and taxis on a personal card, keeping receipts, filing an expense
+  claim, and waiting to be reimbursed.
+- The company has a duty of care but no view of what is happening or
+  being spent until the expense report lands.
+- Big players prove the need: U.S. Bank built time-limited virtual cards
+  that airlines push to stranded passengers (Card as a Service, 2021) and
+  deactivate when they board; Edenred sells virtual cards issued
+  automatically on flight-delay triggers to insurers/assistance firms.
+- Nobody offers this to the small and mid-size companies that Airwallex
+  serves. They have cards and travel bookings, but nothing joins the two
+  when a trip breaks.
+- In the EU the airline owes "care" (meals, hotel) and often 250-600 EUR
+  compensation (EU261). Most travellers never claim. Detour drafts it.
+
+
+------------------------------------------------------------------------
+3. SANDBOX CHECK (done 16 Oct from the official docs - no live calls)
+------------------------------------------------------------------------
+CONFIRMED in Airwallex docs:
+  - Virtual cards are active the moment they are created.
+  - authorization_controls on create AND update:
+      allowed_merchant_categories  MCC allowlist
+      allowed_currencies           currency allowlist
+      transaction_limits           amount + interval PER_TRANSACTION /
+                                   DAILY / WEEKLY / MONTHLY / ALL_TIME
+      active_from / active_to      auths outside the window rejected
+      allowed_transaction_count    SINGLE or MULTIPLE
+  - POST /api/v1/issuing/cards/{id}/update changes controls, status
+    (ACTIVE / INACTIVE / CLOSED) and auto_close_date at any time.
+  - Sandbox simulation POST /api/v1/simulation/issuing/create takes
+    card_id, merchant_category_code, merchant_info, transaction_currency
+    (USD AUD GBP EUR CAD JPY HKD CNY SGD NZD CHF), transaction_amount
+    (max 9,999.99). Passing a previous transaction_id makes an
+    INCREMENTAL authorization (hotel deposit then top-up). Capture and
+    failed authorizations can be simulated too.
+  - Docs: simulated auths must comply with the card's controls (example:
+    100 limit, 110 auth fails).
+  - The official "Purchase agent" recipe does exactly this in the
+    standard sandbox ("Fund a wallet"): issue a card with limits, simulate
+    one auth that declines and one that clears. No platform access needed.
+NOT YET CONFIRMED - test on day 1 with a sandbox key:
+  - Does the simulator reject an auth whose MCC is not on the allowlist,
+    and one outside active_from/active_to? (Docs only show the limit.)
+  - Cardholder creation requirements in sandbox (individual cardholder).
+  - Card in EUR spending from a USD wallet: auto-FX or EUR balance needed.
+  - Issuing webhooks delivered in sandbox (for the live spend feed).
+LIVE SANDBOX RUN (19 Oct 2026, script: ./sandbox_check.mjs)
+  Works:
+  - Login with the scoped key.
+  - Balances: wallet is pre-funded, 10,000,000 each in USD, EUR, GBP, CNY
+    (deposit simulation not needed).
+  - GET /api/v1/issuing/config: primary_currency USD,
+    enable_auto_conversion TRUE, EUR per-transaction max 50,000.
+  - Cardholder create: INDIVIDUAL (name, DOB, address, consent) returns
+    PENDING, then READY within seconds. DELEGATE (email only) is READY
+    in the create response.
+  BLOCKED - card create fails for every variant tried:
+    400 {"code":"invalid_request","message":"Invalid issuance details"}
+    Tried: READY INDIVIDUAL (SG, US, GB, AU) and DELEGATE cardholders,
+    EUR and USD limits, with/without MCC + currency controls,
+    is_personalized true/false, x-api-version 2024-09-27 / 2025-02-14 /
+    2025-06-16 / none, and the older 2024-02-22 shape with issue_to.
+    Account replies: CONSUMER "not allowed for this account"; PREPAID /
+    DEBIT / CREDIT type "not allowed, contact support"; sub_type
+    unsupported. So the request passes validation and the account has
+    no card program / issuing enablement. Not fixable from our side.
+  Results for the four checks:
+    a. cardholder + EUR card    cardholder PASS, card BLOCKED (above)
+    b. MCC 5812 ok / 5732 no    NOT RUN (needs a card)
+    c. outside active window    NOT RUN (needs a card)
+    d. EUR card on USD wallet   NOT RUN live. Account config has
+                                enable_auto_conversion = true, and the
+                                wallet holds EUR anyway, so the demo is
+                                safe either way.
+  From the builder guide (docs, not a live result): the decline reasons
+  include MERCHANT_CATEGORY_NOT_ALLOWED and OUT_OF_ALLOWED_TIME_RANGE, as
+  well as LIMIT_EXCEEDED and CURRENCY_NOT_ALLOWED. That is a strong sign
+  b and c are enforced, but it has not been seen live yet.
+  Web app cross-check (19 Oct): the Spend menu has no Cards section.
+    A card request made in Spend -> Requests (500 EUR, virtual) was
+    approved but stays "Pending card creation"; GET /issuing/cards stays
+    empty. Same block as the API - confirmed account-side.
+    Airwallex in-app assistant (19 Oct): "Card creation isn't available
+    for your Sandbox Business account" - no Create Card button anywhere.
+  Unblock: (1) sandbox web app -> check Issuing / Cards is activated and
+  try creating a virtual card by hand there; (2) if not possible, email
+  devhelp@airwallex.com: "sandbox account <client id>, cards/create
+  returns 'Invalid issuance details' for READY cardholders; please enable
+  a COMMERCIAL virtual card program". Then rerun: node sandbox_check.mjs
+FALLBACK if MCC/window rules are not enforced by the simulator:
+  - Demo the decline with the limit instead, say so honestly in the video,
+    and ask devhelp@airwallex.com for Remote Authorization (our endpoint
+    approves/declines each auth in 2.5s) - needs account enablement.
+VERDICT (19 Oct): NOT YET BUILDABLE ON THIS ACCOUNT. API access, funded
+wallet and cardholders work, but the sandbox will not issue cards
+("Invalid issuance details"), so no card test (a-d) could run. This is
+an account setting, not a design problem. Applying by 23 Oct is still
+fine (the application is the idea); card issuing must be unblocked
+before the build starts on 25 Oct.
+
+
+------------------------------------------------------------------------
+4. THE RULES (in code - the model never sets a number on its own)
+------------------------------------------------------------------------
+States: NORMAL -> DISRUPTED -> OVERNIGHT -> REBOOKED -> HOME (closed)
+
+  DISRUPTED  delay >= 2h, cancellation, or missed connection
+             MCC 5812 restaurants, 5814 fast food, 4121 taxis,
+                 4111 local transport
+             limit = city meals rate x days, + 60 EUR taxis
+  OVERNIGHT  no departure before 23:00 local, or delay >= 6h
+             + MCC 7011 lodging (+ hotel chain codes 3501-3999)
+             limit += city lodging rate x 1.2
+  REBOOKED   active_to = new departure + 6h; auto_close_date set
+  HOME       landed -> INACTIVE, then CLOSED after last captures
+
+City rates: US State Department foreign per diem table (lodging + meals
+by city, public) - confirm source and licence before use. Company can
+override with its own policy file.
+
+Policy caps (default, per company):
+  - 1 night automatic, 2nd night needs a travel manager.
+  - Any single raise > 50% of current limit needs a travel manager.
+  - Never more than one live Detour card per traveller.
+Every approval is bound to: amount, currency, merchant categories, expiry
+and the evidence (flight status + airline message) shown to the approver.
+
+What the model does: reads airline notification emails and the status
+feed and classifies the disruption; answers the traveller in plain words;
+turns requests ("hotel wants a deposit") into a proposed change that the
+rules accept or escalate; drafts the EU261 claim. It calls typed tools
+only (propose_card_change, request_approval, message_traveller). It never
+sees the card number or the API key.
+
+Airwallex rules from the builder guide we follow:
+  - request_id on every create; reuse on retry, new one for a new card.
+  - Webhooks can arrive twice and out of order: dedupe on event id, sort
+    by created_at.
+
+
+------------------------------------------------------------------------
+5. LOOPHOLES AND HOW THEY ARE CLOSED
+------------------------------------------------------------------------
+Traveller spends on non-travel   MCC allowlist on the card itself
+Fake disruption to get money     disruption must match the flight
+                                 status feed, not just an email
+Spoofed airline email            email alone cannot open a card; the
+                                 status feed must agree
+Card left live after trip        active_to + auto_close_date + close on
+                                 landing, three separate guards
+Two cards for one disruption     one live card per traveller, request_id
+Hotel deposit bigger than limit  incremental auth path; above cap ->
+                                 travel manager, never silent raise
+Model talked into a big raise    numbers come from rules; model can only
+                                 propose
+Card in wrong currency           allowed_currencies = local currency
+
+
+------------------------------------------------------------------------
+6. DEMO VIDEO (~3 minutes, sandbox only - matches the guide's shape)
+------------------------------------------------------------------------
+Guide's shape: goal -> plan -> new information -> revised decision ->
+financial action or escalation.
+
+  0:00  "Your flight is cancelled at 11pm in Frankfurt. Who pays for
+        tonight?"
+  0:15  Goal: Ada is flying Singapore -> London via Frankfurt. Plan:
+        nothing to do, trip on track.
+  0:30  New info: inbound delay, connection missed. Detour issues a EUR
+        card: meals + taxis, 120 EUR. Ada gets a message.
+  0:55  Simulated auths: restaurant 5812 18 EUR -> approved. Electronics
+        5732 400 EUR -> declined.
+  1:20  New info: no flight until tomorrow 09:40. Revised decision: hotel
+        allowed, limit raised. Hotel auth 140 EUR, incremental +40 EUR.
+  1:50  Ada: "rebooking failed, need a second night." Over policy ->
+        travel manager gets the approval card with evidence -> approves.
+  2:20  Rebooked flight departs -> card expires. Spend summary. EU261
+        claim pack: 600 EUR compensation + care costs.
+  2:45  "The money was there before she had to ask."
+
+
+------------------------------------------------------------------------
+7. COMPETITION CHECK (16 Oct)
+------------------------------------------------------------------------
+- None of the 10 kits, 8 official recipes or 6 reference builds mention
+  travel.
+- Closest reference build: Allocard (agent sets card limits from budget
+  rules). Same card controls; Detour's limits react to live events. Say
+  this difference in the pitch.
+- Travel-disruption hackathon projects found (e.g. SkySaver AI, Devpost)
+  stop before money: they hand the user to the airline to pay.
+- Enterprise versions exist (U.S. Bank, Edenred) - proof of need, not
+  hackathon rivals.
+
+
+------------------------------------------------------------------------
+8. HONEST LIMITS
+------------------------------------------------------------------------
+- Real flight data needs a paid feed (FlightAware AeroAPI, AeroDataBox).
+  The demo uses a scripted feed; say so.
+- Airwallex card issuing is only offered in some countries.
+- EU261 compensation legally belongs to the passenger; Detour drafts the
+  claim, company policy decides the rest.
+- Sandbox only, no real money.
+
+
+------------------------------------------------------------------------
+9. OPEN QUESTIONS - CONFIRM BEFORE BUILDING
+------------------------------------------------------------------------
+- Application form: must we pick a kit? (Guide says own ideas are fine
+  if built around a financial decision.) Nearest: Kit 02 Expense &
+  Policy.
+- Judging criteria and pre-existing code rules: not published. Ask
+  support@hackerearth.com.
+- Section 3 "not yet confirmed" items - day 1 sandbox test.
+- Per diem source and its licence.
+- Time vs Hypothec: Zecathon closes 28 Oct, build here starts 25 Oct.
+
+
+------------------------------------------------------------------------
+10. APPLICATION TEXT (draft - due 23 Oct)
+------------------------------------------------------------------------
+Detour funds stranded business travellers. When a flight is cancelled or
+badly delayed, an agent issues the traveller an Airwallex virtual card in
+the local currency, limited to meals, hotels and taxis at that city's
+rate, and active only until they fly. As the disruption changes, the
+agent changes the card: it adds a hotel when the delay goes overnight,
+moves the expiry when they are rebooked, escalates a second night to a
+travel manager, and closes the card when they land. Limits, merchant
+categories and approvals live in code; the model reads the disruption,
+talks to the traveller and proposes changes. Built on Airwallex Issuing
+(authorization controls, card updates, simulated authorizations) and
+wallets.
+
+
+------------------------------------------------------------------------
+11. FUNDING OPTIONS IF CARDS STAY BLOCKED (decided 19 Oct 2026)
+------------------------------------------------------------------------
+Cards are NOT required by the hackathon. Guide: "Take one as written,
+change it, or apply the criteria ... to your own idea." 4 of 10 kits use
+cards. Guide also says "Kits 1 through 4 need no extra enablement" -
+Kit 2 is Issuing, so our blocked sandbox is an Airwallex-side fault.
+
+Detour does need some way to get money to the traveller:
+  A. CARDS (plan A, current)  MCC + expiry + live limit changes. Best
+     version. Waiting on devhelp@airwallex.com.
+  B. TRANSFER TO TRAVELLER    capped local-currency payout from city
+     rates; top-up when overnight; over policy -> travel manager.
+     Lost: no merchant control, only after-the-fact checks.
+  C. B + HOTEL PAID DIRECT    meals/taxis sent to traveller, hotel paid
+     from the company wallet to the hotel as a beneficiary, so the
+     largest cost can only go to the hotel. Demo hotel is a test
+     beneficiary. Keep it to the hotel only - not an AP/invoice tool.
+DECISION RULE: on 27 Oct (build start), cards work -> A. Not working -> try a fresh
+sandbox account; still no cards -> build C. Use 25-27 Oct for Hypothec
+(Zecathon closes 28 Oct) while waiting.
+B/C need the API key to also have Transfers + Beneficiaries (Write) -
+both listed under the "Payouts" group in the key's scope list.
+DONE 19 Oct: key edited; GET /beneficiaries and GET /transfers return
+200 (sandbox has one pre-seeded test beneficiary). Nothing sent yet.
+The existing scoped key can be EDITED (Developer -> API keys -> "..." ->
+Edit, needs login password); the secret does not change, so .env stays
+as is.
+
+Is Detour still solid? With A: yes, unchanged. With C: still a real
+financial decision (how much, which currency, when, escalate or not),
+still ahead of travel hackathon projects that stop before money, but the
+"can only be spent on getting home" line weakens to "the hotel can only
+be paid to the hotel" - say this honestly in the pitch.
+
+
+------------------------------------------------------------------------
+SOURCES
+------------------------------------------------------------------------
+Builder guide (kits, "Kits 1 through 4 need no extra enablement"):
+  https://airwallexdev.com/guide
+Manage / edit scoped API keys:
+  https://www.airwallex.com/docs/developer-tools/api/manage-api-keys
+Airwallex create card (authorization_controls, update, status):
+  https://www.airwallex.com/docs/api/issuing/cards/create
+Simulate card transactions (MCC, currency, incremental):
+  https://www.airwallex.com/docs/developer-tools/sandbox-environment/issuing/simulate-transactions-on-issued-cards
+Remote authorization (fallback):
+  https://www.airwallex.com/docs/issuing/card-controls/remote-authorization
+Builder guide + recipes + reference builds:
+  https://airwallexdev.com/guide   https://airwallexdev.com/builds
+U.S. Bank Card as a Service (airline stranded-passenger cards):
+  https://usbank.com/about-us-bank/company-blog/article-library/with-card-as-a-service-us-bank-sparks-more-innovation-in-digital-payments.html
+Edenred trigger-based virtual cards:
+  https://eps.edenred.com/blog/travel-insurance-and-assistance
+SkySaver AI: https://devpost.com/software/skysaver-ai
