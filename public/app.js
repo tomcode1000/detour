@@ -36,7 +36,7 @@ function render(s) {
   $('traveller-name').textContent = s.traveller.name;
   $('manager-name').textContent = `${s.manager} · travel manager`;
 
-  const fundingWarn = s.adapters.fundingName !== 'airwallex';
+  const fundingWarn = !s.adapters.fundingName.startsWith('airwallex');
   const agentWarn = s.adapters.agentName !== 'deepseek';
   $('badges').innerHTML = `
     <span class="badge ${fundingWarn ? 'warn' : 'ok'}">Funding: ${esc(s.adapters.funding)}</span>
@@ -52,8 +52,11 @@ function render(s) {
 
   renderChat(s, tz);
   renderFlights(s, tz);
-  renderCard(s, tz);
-  renderSpend(s, tz);
+  const transfer = s.mode === 'transfer';
+  $('money-title').textContent = transfer ? 'The money' : 'The card';
+  $('spend-title').textContent = transfer ? 'Payment plan' : 'Payments';
+  $('try').style.display = transfer ? 'none' : '';
+  if (transfer) { renderPlan(s, tz); renderPayments(s, tz); } else { renderCard(s, tz); renderSpend(s, tz); }
   renderApprovals(s, tz);
   renderLog(s, tz);
   $('foot').textContent = `${s.note} ${s.ratesNote} Company: ${s.company}.`;
@@ -114,6 +117,56 @@ function renderCard(s, tz) {
     ${sm.declined} payment${sm.declined === 1 ? '' : 's'} blocked · ${sm.approvals} manager approval${sm.approvals === 1 ? '' : 's'} · no receipts needed.</div>` : '';
 }
 
+const sumOf = (rows) => rows.reduce((a, l) => a + l.amount, 0);
+
+function renderPlan(s, tz) {
+  const c = s.card;
+  const pay = s.payments || [];
+  if (!c) {
+    $('card').innerHTML = `<div class="card-empty">Nothing paid yet.<br><small>Detour is watching ${esc(s.traveller.name.split(' ')[0])}'s flights. Nothing to do while the trip is on track.</small></div>`;
+  } else {
+    const k = c.controls;
+    const live = c.status === 'ACTIVE';
+    const sent = pay.filter((l) => l.status === 'SENT');
+    const sched = pay.filter((l) => l.status === 'SCHEDULED');
+    const cancelled = pay.filter((l) => l.status === 'CANCELLED');
+    const fees = sent.reduce((a, l) => a + (l.fee || 0), 0);
+    $('card').innerHTML = `
+      <div class="plan">
+        <div class="row" style="margin-top:0"><span>${esc(k.city)} · until ${dayHm(k.activeTo, tz)}</span><span class="status ${live ? '' : 'off'}">${live ? 'COVERING' : c.status === 'CLOSED' ? 'CLOSED' : 'STOPPED'}</span></div>
+        <div class="big">${money(sumOf(sent), k.currency)}</div>
+        <div class="row" style="margin-top:0"><span>paid out so far</span><span></span></div>
+        <div class="row"><span>To ${esc(s.traveller.name.split(' ')[0])} (meals &amp; taxis)</span><span>${money(sumOf(sent.filter((l) => l.role === 'traveller')), k.currency)}</span></div>
+        <div class="row"><span>Straight to the hotel</span><span>${money(sumOf(sent.filter((l) => l.role === 'hotel')), k.currency)}</span></div>
+        <div class="row"><span>Scheduled, cancellable</span><span>${money(sumOf(sched), k.currency)}</span></div>
+        <div class="row saved"><span>Cancelled, never left the company</span><span>${money(sumOf(cancelled), k.currency)}</span></div>
+        <div class="row"><span>Airwallex fees</span><span>${money(fees, k.currency)}</span></div>
+      </div>
+      <div class="chips">${c.categoryLabels.map((l) => `<span class="chip">${esc(l)}</span>`).join('')}<span class="chip">${k.nights} night${k.nights === 1 ? '' : 's'}</span></div>`;
+  }
+  const sm = s.summary;
+  $('summary').innerHTML = sm ? `<div class="summary"><h4>Trip closed · summary</h4>
+    Sent <b>${money(sm.toTraveller, sm.currency)}</b> to ${esc(s.traveller.name.split(' ')[0])} and <b>${money(sm.toHotel, sm.currency)}</b> straight to the hotel in ${sm.payments} payments.<br>
+    <b>${money(sm.cancelled, sm.currency)}</b> was scheduled but never paid out. ${sm.approvals} manager approval${sm.approvals === 1 ? '' : 's'} · no receipts, no expense claim.</div>` : '';
+}
+
+function renderPayments(s, tz) {
+  const pay = s.payments || [];
+  if (!pay.length) {
+    $('spend').innerHTML = '<li class="none">No payments yet.</li>';
+    return;
+  }
+  const first = s.traveller.name.split(' ')[0];
+  $('spend').innerHTML = pay.slice().reverse().map((l) => {
+    const cls = l.status === 'SENT' ? 'ok' : l.status === 'SCHEDULED' ? 'sched' : 'cancel';
+    const fx = l.received && l.received.currency !== l.currency ? ` → ${money(l.received.amount, l.received.currency)}` : '';
+    const when = l.status === 'SENT' ? `Paid ${dayHm(l.payAt, tz)}` : l.status === 'SCHEDULED' ? `Scheduled for ${dayHm(l.payAt, tz)} · cancellable` : 'Cancelled before payment';
+    return `<li class="${cls}">
+      <span><span class="to">${l.role === 'hotel' ? 'Hotel' : first}</span>${esc(l.what)}</span><span class="amt">${money(l.amount, l.currency)}</span>
+      <span class="why">${when}${esc(fx)}${l.fee ? ` · fee ${money(l.fee, l.currency)}` : ''}</span></li>`;
+  }).join('');
+}
+
 function renderSpend(s, tz) {
   if (!s.transactions.length) {
     $('spend').innerHTML = '<li class="none">No payments yet.</li>';
@@ -143,8 +196,9 @@ function renderApprovals(s, tz) {
       <div class="why">${esc(a.why)}</div>
       <dl class="bound">
         <dt>Amount</dt><dd>+${money(a.delta, to.currency)} → limit ${money(to.limit, to.currency)}</dd>
-        <dt>Merchants</dt><dd>${esc(to.categories.join(', '))} (${esc(to.mccs.join(', '))})</dd>
-        <dt>Expires</dt><dd>${dayHm(to.activeTo, tz)}</dd>
+        ${s.mode === 'transfer'
+          ? `<dt>Pays</dt><dd>${esc(s.traveller.name.split(' ')[0])}: meals &amp; taxis${to.nights ? ` · hotel paid directly (${to.nights} night${to.nights > 1 ? 's' : ''})` : ''}</dd><dt>Covers until</dt><dd>${dayHm(to.activeTo, tz)}</dd>`
+          : `<dt>Merchants</dt><dd>${esc(to.categories.join(', '))} (${esc(to.mccs.join(', '))})</dd><dt>Expires</dt><dd>${dayHm(to.activeTo, tz)}</dd>`}
       </dl>
       <div class="ev"><b>Evidence</b><ul>
         ${ev.flights.map((f) => `<li>${esc(f.id)} ${esc(f.from)}→${esc(f.to)}: ${esc(f.status)}, departs ${dayHm(f.est_dep, tz)}</li>`).join('')}

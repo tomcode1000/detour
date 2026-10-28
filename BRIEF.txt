@@ -27,6 +27,19 @@ that follows the traveller when that happens.
     simulation) + funding/airwallex.js (untested - cards blocked),
     agent stand-in + DeepSeek (typed tools), 3-panel page, 16 tests pass.
     Run: npm start -> http://localhost:4100 ; npm test
+  28 Oct later: SWITCHED TO FALLBACK C (section 11), now the default,
+    running LIVE on Airwallex sandbox transfers: allowance to Ada's SGD
+    account (Airwallex converts EUR->SGD), hotel paid direct via SWIFT,
+    later days SCHEDULED and CANCELLED if not needed (verified with
+    Airwallex: cancelled transfers show CANCELLED). New scene: an
+    earlier seat cancels night 2 + day 3 (240 EUR never paid out).
+    Card version kept: FUNDING=cards when Airwallex enables issuing.
+    20 tests pass.
+  Ideas agreed to add: EU261 claim - Detour drafts the claim to the
+    airline for care costs it fronted (and tells Ada about her own
+    compensation). A person sends it; airlines can refuse for
+    extraordinary circumstances. Maybe: many travellers / one storm;
+    FX check before paying.
   Next build steps:
     1. User adds DEEPSEEK_API_KEY to .env -> test the real agent.
     2. EU261 claim draft at close (section 1 step 6).

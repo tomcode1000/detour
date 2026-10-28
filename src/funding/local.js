@@ -13,8 +13,9 @@ export function createLocalFunding({ clock }) {
     .reduce((s, t) => s + t.amount, 0);
 
   return {
+    kind: 'card',
     name: 'local',
-    label: 'Local simulation (not Airwallex)',
+    label: 'Local simulation · card (not Airwallex)',
 
     async issue({ controls, requestId }) {
       if (byRequestId.has(requestId)) return { ...cards.get(byRequestId.get(requestId)) };

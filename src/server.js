@@ -16,7 +16,7 @@ const scenario = load(`scenarios/${env.SCENARIO || 'ada-frankfurt'}.json`);
 const engine = new Engine({
   scenario,
   policy,
-  makeFunding: ({ clock }) => createFunding({ env, clock }),
+  makeFunding: ({ clock, runKey }) => createFunding({ env, clock, runKey, scenario, policy }),
   agent: createAgent({ env }),
 });
 

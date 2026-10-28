@@ -64,10 +64,16 @@ test('Ada: full disruption from missed connection to closed card', async () => {
   assert.equal(e.card.controls.limit, 600);
   assert.equal(e.card.controls.activeTo, Date.parse('2026-11-07T14:40:00Z'));
 
+  // A seat opens this afternoon -> back to one night, card ends 6h after DA910.
+  await playUntil(e, (x) => x.legs.includes('DA910'));
+  assert.equal(e.card.controls.nights, 1);
+  assert.equal(e.card.controls.limit, 360);
+  assert.equal(e.card.controls.activeTo, Date.parse('2026-11-06T22:30:00Z'));
+
   // Departs -> card off; lands -> closed with a summary.
   await playUntil(e, (x) => x.finished);
   assert.equal(e.card.status, 'CLOSED');
-  assert.equal(e.summary.spent, 18.4 + 140 + 40 + 150);
+  assert.equal(e.summary.spent, 18.4 + 140 + 40);
   assert.equal(e.summary.declined, 1);
   assert.equal(e.log.filter((l) => l.source === 'error').length, 0, JSON.stringify(e.log.filter((l) => l.source === 'error')));
 });

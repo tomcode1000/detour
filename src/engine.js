@@ -1,8 +1,10 @@
 // The Detour engine: plays a trip's events (flight feed, airline emails, traveller messages,
-// merchant charges), asks the rules what the card should be, and keeps the card in line.
+// merchant charges), asks the rules what the money should be, and keeps the funding in line.
+// The funding is either a card or scheduled transfers; both take the same plan from the rules.
+// (Inside the engine the plan is called "card" either way.)
 import * as rules from './rules.js';
 import { parseTime } from './time.js';
-import { fmtMoney, DECLINE_WORDS } from './agent/words.js';
+import { fmtMoney, DECLINE_WORDS, describePayments } from './agent/words.js';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -20,7 +22,10 @@ export class Engine {
   reset() {
     const s = this.scenario;
     this.clock = parseTime(s.start);
-    this.funding = this.makeFunding({ clock: () => this.clock });
+    // Each run gets fresh request ids, so a replayed demo is not ignored as a duplicate.
+    this.runSeq = (this.runSeq || 0) + 1;
+    this.runKey = `${this.runId}-${this.runSeq}`;
+    this.funding = this.makeFunding({ clock: () => this.clock, runKey: () => this.runKey });
     this.flights = {};
     for (const [id, f] of Object.entries(s.flights)) this.flights[id] = this.normalFlight(f);
     this.legs = [...s.legs];
@@ -61,13 +66,20 @@ export class Engine {
     if (text) this.messages.push({ at: this.clock, from: 'detour', text });
   }
 
+  get mode() { return this.funding.kind; } // 'card' | 'transfer'
+
   async notify(notice) {
-    const text = await this.agent.notify({ notice: { spent: this.spent, ...notice }, card: this.card, policy: this.policy });
+    const text = await this.agent.notify({ notice: { spent: this.spent, mode: this.mode, ...notice }, card: this.card, policy: this.policy });
     await this.say(text);
   }
 
   // ---------------------------------------------------------------- playing the story
-  get finished() { return this.cursor >= this.scenario.events.length; }
+  // Events marked for the other funding mode (e.g. card payments at a till) are skipped.
+  skipOtherMode() {
+    while (!this.finishedRaw && this.scenario.events[this.cursor].mode && this.scenario.events[this.cursor].mode !== this.mode) this.cursor++;
+  }
+  get finishedRaw() { return this.cursor >= this.scenario.events.length; }
+  get finished() { this.skipOtherMode(); return this.finishedRaw; }
 
   async step() {
     if (this.busy || this.finished) return false;
@@ -77,6 +89,7 @@ export class Engine {
       this.waiting = false;
       const ev = this.scenario.events[this.cursor++];
       this.clock = Math.max(this.clock, parseTime(ev.at));
+      this.funding.tick?.();
       await this.apply(ev);
       await this.reconcile();
     } catch (e) {
@@ -170,8 +183,8 @@ export class Engine {
         d.closed = true;
         this.record('rules', `${leg.id} has departed - the disruption is over.`);
         if (this.card?.status === 'ACTIVE') {
-          await this.setCardStatus('INACTIVE');
-          await this.notify({ type: 'expired' });
+          const payments = await this.setCardStatus('INACTIVE');
+          await this.notify({ type: 'expired', payments });
         }
         return;
       }
@@ -196,7 +209,7 @@ export class Engine {
     const next = flight.id === d.missedFlight ? null : rules.nextDeparture(flight);
 
     let nights = rules.countNights({ start: d.start, next, now: this.clock, tz: city.tz, policy: this.policy });
-    nights = Math.max(nights, this.card?.grantedNights ?? 0); // nights the manager approved stay
+    nights = Math.max(nights, this.card?.grantedNights ?? 0); // nights approved without feed proof stay
     const allowed = Math.max(this.card?.approvedNights ?? 0, this.policy.rules.auto_nights);
     if (nights > allowed && (this.card?.declinedNights ?? 0) >= nights) nights = allowed;
 
@@ -225,31 +238,48 @@ export class Engine {
       extras: extras ?? this.card?.extras ?? 0,
       extraCategories: extraCategories ?? this.card?.extraCategories ?? [],
     });
-    return { ...planned, tz: city.tz, city: city.city };
+    return { ...planned, tz: city.tz, city: city.city, airport: d.airport };
+  }
+
+  // What the transfer funding just did, in words, for the log and the traveller.
+  paymentsText(changes) {
+    return changes ? describePayments(changes, this.policy.cities[this.disruption?.airport]?.tz || 'UTC') : '';
   }
 
   async issue(controls, reason) {
-    const requestId = `detour-${this.runId}-${this.scenario.traveller.id}-d${this.disruption.seq}`;
+    const requestId = `detour-${this.runKey}-${this.scenario.traveller.id}-d${this.disruption.seq}`;
     const card = await this.funding.issue({ traveller: this.scenario.traveller, controls, requestId });
-    this.card = { ...card, controls, approvedNights: 0, grantedNights: 0, declinedNights: 0, extras: 0, extraCategories: [] };
-    this.record('card', `Card issued: ${fmtMoney(controls.limit, controls.currency)} for ${controls.categories.join(', ')}, until ${this.when(controls.activeTo)}.`, { requestId });
-    await this.notify({ type: 'issued', reason: this.reasonInWords(reason) });
+    const { changes, ...rest } = card;
+    this.card = { ...rest, controls, approvedNights: 0, grantedNights: 0, declinedNights: 0, extras: 0, extraCategories: [] };
+    const payments = this.paymentsText(changes);
+    if (this.mode === 'transfer') this.record('money', `Allowance opened (${fmtMoney(controls.limit, controls.currency)} planned). Detour ${payments}.`, { requestId });
+    else this.record('card', `Card issued: ${fmtMoney(controls.limit, controls.currency)} for ${controls.categories.join(', ')}, until ${this.when(controls.activeTo)}.`, { requestId });
+    await this.notify({ type: 'issued', reason: this.reasonInWords(reason), payments });
   }
 
-  async updateCard(controls, change) {
+  async updateCard(controls, change, prefix) {
     const before = this.card.controls;
     const card = await this.funding.update(this.card.id, controls);
     this.card.controls = controls;
     this.card.status = card.status || this.card.status;
     const what = change || this.diff(before, controls);
-    this.record('card', `Card updated: ${what}.`);
-    await this.notify({ type: 'updated', change: what });
+    const payments = this.paymentsText(card.changes);
+    if (this.mode === 'transfer') {
+      this.record('money', `Plan updated (${what}). ${payments ? `Detour ${payments}.` : 'No payment changes.'}`);
+      if (payments) await this.notify({ type: 'updated', change: what, payments, prefix });
+    } else {
+      this.record('card', `Card updated: ${what}.`);
+      await this.notify({ type: 'updated', change: what, prefix });
+    }
   }
 
   async setCardStatus(status) {
-    await this.funding.setStatus(this.card.id, status);
+    const res = await this.funding.setStatus(this.card.id, status);
     this.card.status = status;
-    this.record('card', `Card ${status === 'INACTIVE' ? 'switched off' : status.toLowerCase()}.`);
+    const payments = this.paymentsText(res?.changes);
+    if (this.mode === 'transfer') this.record('money', `Allowance ${status === 'INACTIVE' ? 'stopped' : status.toLowerCase()}. ${payments ? `Detour ${payments}.` : 'Nothing left to cancel.'}`);
+    else this.record('card', `Card ${status === 'INACTIVE' ? 'switched off' : status.toLowerCase()}.`);
+    return payments;
   }
 
   diff(a, b) {
@@ -291,12 +321,12 @@ export class Engine {
     }
   }
 
-  async requestApproval({ kind, from, to, why, tell, quiet }) {
+  async requestApproval({ kind, from, to, why, tell, quiet, unconfirmed = false }) {
     const same = this.approvals.find((a) => a.status === 'PENDING' && a.kind === kind && rules.sameControls(a.to, to));
     if (same) return same;
     this.supersedePending(to);
     const approval = {
-      id: `apr_${this.approvals.length + 1}`, kind, at: this.clock, status: 'PENDING', why,
+      id: `apr_${this.approvals.length + 1}`, kind, at: this.clock, status: 'PENDING', why, unconfirmed,
       from: from && clone(from), to: clone(to),
       delta: from ? Math.round((to.limit - from.limit) * 100) / 100 : to.limit,
       evidence: this.evidence(),
@@ -326,12 +356,14 @@ export class Engine {
           await this.issue(a.to, this.disruption.reason);
         } else {
           this.card.approvedNights = Math.max(this.card.approvedNights, a.to.nights);
-          if (a.kind === 'nights') this.card.grantedNights = Math.max(this.card.grantedNights, a.to.nights);
+          // A night the feed confirmed follows the feed (an earlier flight removes it again).
+          // A night approved on the traveller's word alone stays until the trip ends.
+          if (a.unconfirmed) this.card.grantedNights = Math.max(this.card.grantedNights, a.to.nights);
           if (a.kind === 'raise') {
             this.card.extras = a.to.breakdown.extras;
             this.card.extraCategories = a.to.categories.filter((k) => !['meals', 'transport'].includes(k) && !(k === 'lodging' && a.to.nights > 0));
           }
-          await this.updateCard(a.to);
+          await this.updateCard(a.to, null, `${this.policy.travel_manager} approved it.`);
         }
       } else {
         if (this.card) this.card.declinedNights = Math.max(this.card.declinedNights, a.to.nights);
@@ -363,12 +395,18 @@ export class Engine {
       // The traveller's word alone cannot add a night: the manager decides, with the feed as evidence.
       const city = this.policy.cities[this.disruption.airport];
       const to = this.plan({ nights: this.card.controls.nights + 1, next: null, city });
-      await this.requestApproval({ kind: 'nights', from: this.card.controls, to, why: `Ada asks for night ${to.nights}, but the flight feed does not show it yet`, quiet: true });
+      await this.requestApproval({ kind: 'nights', from: this.card.controls, to, why: `Ada asks for night ${to.nights}, but the flight feed does not show it yet`, quiet: true, unconfirmed: true });
       return { result: 'escalate', why: 'The flight information does not show another night yet.' };
     }
-    if (p.kind !== 'raise') return { result: 'info' };
+    if (p.kind !== 'raise') return { result: 'info', mode: this.mode };
 
-    const outcome = rules.evaluateRequest({ card: this.card, spent: this.spent, request: p, policy: this.policy });
+    // With transfers the hotel is paid directly, and everything planned is already sent or
+    // scheduled, so any extra the traveller asks for is a raise.
+    if (this.mode === 'transfer' && p.category === 'lodging' && this.card?.controls.categories.includes('lodging')) {
+      return { result: 'covered_direct', mode: this.mode };
+    }
+    const spent = this.mode === 'transfer' ? (this.card?.controls.limit ?? 0) : this.spent;
+    const outcome = { ...rules.evaluateRequest({ card: this.card, spent, request: p, policy: this.policy }), mode: this.mode };
     if (outcome.result === 'raise' || outcome.result === 'escalate') {
       const city = this.policy.cities[this.disruption.airport];
       const extraCategories = [...new Set([...(this.card.extraCategories || []), outcome.category])];
@@ -386,6 +424,7 @@ export class Engine {
   }
 
   async charge(ev) {
+    if (this.mode !== 'card') return null;
     if (!this.card) {
       this.record('merchant', `${ev.merchant} tried to charge ${fmtMoney(ev.amount, ev.currency)} but there is no card.`);
       return null;
@@ -421,6 +460,7 @@ export class Engine {
 
   async closeOut() {
     if (this.card && this.card.status !== 'CLOSED') await this.setCardStatus('CLOSED');
+    if (this.mode === 'transfer') return this.closeOutTransfers();
     const approved = this.transactions.filter((t) => t.status === 'APPROVED');
     const byCategory = {};
     for (const t of approved) {
@@ -440,6 +480,27 @@ export class Engine {
     if (this.card) await this.notify({ type: 'closed', spent: this.summary.spent, currency: this.summary.currency });
   }
 
+  closeOutTransfers() {
+    const ledger = this.funding.ledger();
+    const sum = (rows) => Math.round(rows.reduce((s, l) => s + l.amount, 0) * 100) / 100;
+    const sent = ledger.filter((l) => l.status === 'SENT');
+    this.summary = {
+      mode: 'transfer',
+      currency: this.card?.controls.currency,
+      toTraveller: sum(sent.filter((l) => l.role === 'traveller')),
+      toHotel: sum(sent.filter((l) => l.role === 'hotel')),
+      cancelled: sum(ledger.filter((l) => l.status === 'CANCELLED')),
+      cancelledCount: ledger.filter((l) => l.status === 'CANCELLED').length,
+      fees: Math.round(ledger.reduce((s, l) => s + (l.status === 'SENT' ? l.fee || 0 : 0), 0) * 100) / 100,
+      payments: sent.length,
+      nights: this.card?.controls.nights ?? 0,
+      approvals: this.approvals.filter((a) => a.status === 'APPROVED').length,
+    };
+    const s = this.summary;
+    this.record('money', `Trip over. Sent ${fmtMoney(s.toTraveller, s.currency)} to Ada and ${fmtMoney(s.toHotel, s.currency)} to the hotel; ${fmtMoney(s.cancelled, s.currency)} was never paid out.`);
+    if (this.card) return this.notify({ type: 'closed', summary: s });
+  }
+
   // ---------------------------------------------------------------- what the page sees
   snapshot() {
     const next = this.scenario.events[this.cursor];
@@ -450,7 +511,9 @@ export class Engine {
       tz: this.policy.cities[this.disruption?.airport]?.tz || 'Europe/Berlin',
       scene: this.scene,
       progress: { at: this.cursor, total: this.scenario.events.length, finished: this.finished, waiting: this.waiting && this.approvals.some((a) => a.status === 'PENDING'), next: next ? next.type : null },
+      mode: this.mode,
       adapters: { funding: this.funding.label, fundingName: this.funding.name, agent: this.agent.label, agentName: this.agent.name },
+      payments: this.funding.ledger ? this.funding.ledger() : null,
       company: this.policy.company,
       manager: this.policy.travel_manager,
       ratesNote: this.policy.rates_note,

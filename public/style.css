@@ -116,6 +116,21 @@ h1, h2, h3 { margin: 0; }
 .summary { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--ok-bg); border: 1px solid #bfe5cf; font-size: 13px; }
 .summary h4 { margin: 0 0 6px; font-size: 13px; }
 
+/* transfers */
+.plan { border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.plan .big { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.plan .row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-top: 6px; }
+.plan .row span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+.plan .row.saved span:last-child { color: var(--ok); }
+.plan .status { font-size: 11px; padding: 3px 8px; border-radius: 99px; background: var(--ok-bg); color: var(--ok); }
+.plan .status.off { background: var(--bg); color: var(--muted); }
+.feed li.sched { border-style: dashed; }
+.feed li.sched .why { color: var(--warn); }
+.feed li.cancel { background: var(--bg); }
+.feed li.cancel .amt { text-decoration: line-through; color: var(--muted); }
+.feed li.cancel .why { color: var(--ok); }
+.to { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-right: 4px; }
+
 /* approvals */
 .approval { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
 .approval.pending { border-color: var(--manager); box-shadow: 0 0 0 3px rgba(122, 77, 224, 0.12); }

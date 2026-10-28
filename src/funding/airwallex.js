@@ -1,43 +1,14 @@
 // Airwallex Issuing in the sandbox. Written against the documented API; card calls are
 // NOT yet tested live because the sandbox account cannot issue cards (BRIEF section 3).
 // Never logs the API key, the token, or card numbers.
-const BASE = 'https://api.sandbox.airwallex.com';
+import { createAirwallexClient } from './airwallex-client.js';
 
 // Scenario time and real time differ (the story happens on a fixed date and its clock jumps).
 // Card windows are sent in real time: active from now, active for the same length as planned.
 export function createAirwallexFunding({ env, clock }) {
-  let token = null;
-  let tokenAt = 0;
+  const call = createAirwallexClient(env);
   const cardholders = new Map();
   const lastTx = new Map(); // our label -> airwallex transaction id, for incremental auths
-
-  async function login() {
-    const res = await fetch(`${BASE}/api/v1/authentication/login`, {
-      method: 'POST',
-      headers: { 'x-client-id': env.AIRWALLEX_CLIENT_ID, 'x-api-key': env.AIRWALLEX_API_KEY },
-    });
-    if (!res.ok) throw new Error(`Airwallex login failed (HTTP ${res.status})`);
-    token = (await res.json()).token;
-    tokenAt = Date.now();
-  }
-
-  async function call(method, path, body) {
-    if (!token || Date.now() - tokenAt > 25 * 60e3) await login();
-    const res = await fetch(BASE + path, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
-    if (!res.ok) {
-      const err = new Error(`Airwallex ${method} ${path} -> ${res.status} ${data.code || ''} ${data.message || ''}`.trim());
-      err.status = res.status;
-      throw err;
-    }
-    return data;
-  }
 
   const stamp = (ms) => new Date(ms).toISOString().replace(/\.\d+Z$/, '+0000');
   const toReal = (scenarioMs) => Date.now() + (scenarioMs - clock());
@@ -82,8 +53,9 @@ export function createAirwallexFunding({ env, clock }) {
   });
 
   return {
+    kind: 'card',
     name: 'airwallex',
-    label: 'Airwallex sandbox',
+    label: 'Airwallex sandbox · card',
 
     async issue({ traveller, controls, requestId }) {
       const cardholderId = await ensureCardholder(traveller);

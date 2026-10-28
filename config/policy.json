@@ -19,7 +19,16 @@
     "lodging": { "label": "Hotel", "mccs": ["7011"] }
   },
   "cities": {
-    "FRA": { "city": "Frankfurt", "tz": "Europe/Berlin", "currency": "EUR", "meals_per_day": 60, "transport": 60, "lodging_per_night": 150 },
+    "FRA": {
+      "city": "Frankfurt", "tz": "Europe/Berlin", "currency": "EUR", "meals_per_day": 60, "transport": 60, "lodging_per_night": 150,
+      "hotel": {
+        "name": "Airport Hotel Frankfurt GmbH",
+        "entity_type": "COMPANY",
+        "note": "Fictional company hotel with test bank details.",
+        "address": { "country_code": "DE", "city": "Frankfurt", "street_address": "Hugo-Eckener-Ring 15", "postcode": "60549" },
+        "bank": { "method": "SWIFT", "account_currency": "EUR", "bank_country_code": "DE", "iban": "DE89370400440532013000", "swift_code": "COBADEFFXXX" }
+      }
+    },
     "LHR": { "city": "London", "tz": "Europe/London", "currency": "GBP", "meals_per_day": 55, "transport": 50, "lodging_per_night": 170 },
     "SIN": { "city": "Singapore", "tz": "Asia/Singapore", "currency": "SGD", "meals_per_day": 90, "transport": 60, "lodging_per_night": 300 }
   }
