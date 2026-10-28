@@ -18,8 +18,25 @@ Name: a detour is the unplanned turn a trip takes. Detour is the money
 that follows the traveller when that happens.
 
 ------------------------------------------------------------------------
-0. RESUME HERE (updated 19 Oct 2026)
+0. RESUME HERE (updated 28 Oct 2026)
 ------------------------------------------------------------------------
+28 Oct: ACCEPTED. Build started. Cards still blocked (reran
+  sandbox_check.mjs 28 Oct: same "Invalid issuance details").
+  First slice built and committed (git, see README.md):
+    rules.js (all numbers), engine.js, funding/local.js (labelled local
+    simulation) + funding/airwallex.js (untested - cards blocked),
+    agent stand-in + DeepSeek (typed tools), 3-panel page, 16 tests pass.
+    Run: npm start -> http://localhost:4100 ; npm test
+  Next build steps:
+    1. User adds DEEPSEEK_API_KEY to .env -> test the real agent.
+    2. EU261 claim draft at close (section 1 step 6).
+    3. Webhook/live spend feed once cards work; FUNDING=airwallex run.
+    4. If cards still blocked: decide on fallback C (section 11).
+    5. Demo video per section 6 (read the demo-video skill first).
+  Rule change vs section 4: a 6h+ daytime delay alone does not add a
+  hotel; nights = 23:00 local cut-offs crossed before the next flight.
+
+Older notes:
 Done:
   - Idea chosen and checked against the user's hackathon rules.
   - Sandbox capabilities checked from docs (section 3).
