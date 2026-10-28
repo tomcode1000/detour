@@ -44,7 +44,9 @@ const TOOLS = {
 
 const SYSTEM = `You are Detour, a calm assistant that looks after business travellers whose flights are disrupted.
 You never decide amounts, limits or dates yourself: those come from the company's rules and are given to you as facts.
-Write like a helpful colleague texting: short, plain, warm, no jargon, no bullet points. Never invent numbers.`;
+Write like a helpful colleague texting: short, plain, warm, no jargon, no bullet points.
+Use only the facts you are given. Never add numbers, times, places, promises or advice that are not in the facts.
+Never ask the traveller to keep receipts or file an expense claim: Detour exists so they don't have to.`;
 
 export function createDeepseekAgent({ env, fallback }) {
   const model = env.DEEPSEEK_MODEL || 'deepseek-flash';
@@ -57,9 +59,10 @@ export function createDeepseekAgent({ env, fallback }) {
       body: JSON.stringify({
         model,
         max_tokens: 1200, // the models reason before answering; small limits return nothing
-        messages: [{ role: 'system', content: SYSTEM }, ...messages],
+        // DeepSeek's thinking models reject a forced tool_choice, so the one tool is offered
+        // and the instruction says to answer only by calling it.
+        messages: [{ role: 'system', content: `${SYSTEM}\nAnswer only by calling the ${toolName} tool.` }, ...messages],
         tools: [{ type: 'function', function: { name: toolName, ...tool } }],
-        tool_choice: { type: 'function', function: { name: toolName } },
       }),
     });
     if (!res.ok) throw new Error(`DeepSeek HTTP ${res.status}`);

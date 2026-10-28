@@ -22,13 +22,13 @@ export function paymentsFor(controls) {
   const items = [];
   const perDay = round2(breakdown.meals / (nights + 1));
   for (let d = 0; d <= nights; d++) {
-    items.push({ key: `meals-${d + 1}`, role: 'traveller', what: `Meals, day ${d + 1}`, amount: perDay, payAt: d === 0 ? start : localTime(start, d, '06:00', tz) });
+    items.push({ key: `meals-${d + 1}`, role: 'traveller', what: `Day ${d + 1} meals`, amount: perDay, payAt: d === 0 ? start : localTime(start, d, '06:00', tz) });
   }
-  items.push({ key: 'transport', role: 'traveller', what: 'Taxis & local transport', amount: breakdown.transport, payAt: start });
+  items.push({ key: 'transport', role: 'traveller', what: 'Taxis and local transport', amount: breakdown.transport, payAt: start });
   if (nights > 0) {
     const perNight = round2(breakdown.lodging / nights);
     for (let k = 1; k <= nights; k++) {
-      items.push({ key: `hotel-${k}`, role: 'hotel', what: `Hotel, night ${k}`, amount: perNight, payAt: Math.max(start, localTime(start, k - 1, '20:00', tz)) });
+      items.push({ key: `hotel-${k}`, role: 'hotel', what: `Night ${k} hotel`, amount: perNight, payAt: Math.max(start, localTime(start, k - 1, '20:00', tz)) });
     }
   }
   return items.filter((i) => i.payAt <= activeTo).map((i) => ({ ...i, currency }));

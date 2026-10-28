@@ -32,6 +32,7 @@ export class Engine {
     this.cursor = 0;
     this.disruption = null;
     this.disruptionSeq = 0;
+    this.toldFlight = null;
     this.card = null;
     this.transactions = [];
     this.approvals = [];
@@ -70,7 +71,16 @@ export class Engine {
 
   async notify(notice) {
     const text = await this.agent.notify({ notice: { spent: this.spent, mode: this.mode, ...notice }, card: this.card, policy: this.policy });
+    this.noteModelFallback();
     await this.say(text);
+  }
+
+  // If a model call failed, the stand-in answered instead; say so in the log, never silently.
+  noteModelFallback() {
+    if (this.agent.lastError) {
+      this.record('agent', `Model call failed (${this.agent.lastError}); the stand-in answered instead.`);
+      this.agent.lastError = null;
+    }
   }
 
   // ---------------------------------------------------------------- playing the story
@@ -132,6 +142,8 @@ export class Engine {
         break;
       case 'email': {
         const parsed = await this.agent.readEmail(ev);
+        this.noteModelFallback();
+        parsed.flights = [...new Set((parsed.flights || []).map((f) => String(f).replace(/\s+/g, '').toUpperCase()))];
         const agrees = this.feedAgrees(parsed);
         this.emails.push({ at: this.clock, from: ev.from, subject: ev.subject, body: ev.body, parsed, agrees });
         this.record('agent', `Airline email read as "${parsed.kind}" (${parsed.flights.join(', ') || 'no flight'}). ${agrees ? 'The flight feed agrees.' : 'The flight feed does not confirm this - an email alone cannot open or raise a card.'}`);
@@ -226,7 +238,10 @@ export class Engine {
       return this.requestApproval({ kind: 'nights', from: this.card.controls, to: planned, why, tell });
     }
     this.supersedePending(planned);
-    await this.updateCard(planned);
+    // Tell the traveller about a new flight before the money change it causes.
+    const newFlight = next && this.toldFlight !== flight.id ? `You're booked on ${flight.id}, leaving ${this.when(next)}.` : null;
+    if (next) this.toldFlight = flight.id;
+    await this.updateCard(planned, null, newFlight);
   }
 
   plan({ nights, next, city, extras, extraCategories }) {
@@ -381,17 +396,19 @@ export class Engine {
   async travellerSays(text) {
     this.messages.push({ at: this.clock, from: 'traveller', text });
     const proposal = await this.agent.understand(text, { card: this.card, policy: this.policy, spent: this.spent });
+    this.noteModelFallback();
     this.record('agent', `Understood Ada as: ${JSON.stringify(proposal)}`);
     const outcome = await this.handleProposal(proposal);
     this.record('rules', `Decision: ${outcome.result}${outcome.why ? ` - ${outcome.why}` : ''}`);
     const reply = await this.agent.reply({ text, outcome: { ...outcome, spent: this.spent }, card: this.card, policy: this.policy });
+    this.noteModelFallback();
     await this.say(reply);
   }
 
   async handleProposal(p) {
     if (p.kind === 'add_night') {
       if (this.approvals.some((a) => a.status === 'PENDING' && a.kind === 'nights')) return { result: 'pending' };
-      if (!this.card || this.card.status !== 'ACTIVE') return { result: 'no_card' };
+      if (!this.card || this.card.status !== 'ACTIVE') return { result: 'no_card', mode: this.mode };
       // The traveller's word alone cannot add a night: the manager decides, with the feed as evidence.
       const city = this.policy.cities[this.disruption.airport];
       const to = this.plan({ nights: this.card.controls.nights + 1, next: null, city });

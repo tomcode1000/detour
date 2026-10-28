@@ -28,7 +28,10 @@ export function describePayments({ created = [], cancelled = [] }, tz) {
     const total = r.reduce((s, l) => s + l.received.amount, 0);
     return ` (${fmtMoney(total, r[0].received.currency)} in your account)`;
   };
-  const names = (rows) => rows.map((l) => l.what.toLowerCase()).join(', ');
+  const names = (rows) => {
+    const n = rows.map((l) => l.what.toLowerCase());
+    return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n.at(-1)}` : n[0];
+  };
   const total = (rows) => fmtMoney(rows.reduce((s, l) => s + l.amount, 0), rows[0].currency);
   const sentToYou = created.filter((l) => l.role === 'traveller' && l.status === 'SENT');
   if (sentToYou.length) parts.push(`sent you ${total(sentToYou)}${received(sentToYou)} for ${names(sentToYou)}`);
@@ -40,7 +43,7 @@ export function describePayments({ created = [], cancelled = [] }, tz) {
       ? `paid ${l.payeeName} ${fmtMoney(l.amount, l.currency)} directly for ${l.what.toLowerCase()} - just give your name at the desk`
       : `will pay ${l.payeeName} ${fmtMoney(l.amount, l.currency)} for ${l.what.toLowerCase()} on ${fmtWhen(l.payAt, tz)}`);
   }
-  if (cancelled.length) parts.push(`cancelled ${total(cancelled)} that is no longer needed (${names(cancelled)}) - it never leaves the company account`);
+  if (cancelled.length) parts.push(`cancelled the ${names(cancelled)} payments (${total(cancelled)}) because you won't need them`);
   return parts.join('; ');
 }
 
@@ -96,7 +99,9 @@ export function describeOutcome(outcome, card, policy) {
     case 'escalate': return `${outcome.why} I've sent it to ${policy.travel_manager} for approval and will let you know.`;
     case 'pending': return `${policy.travel_manager} is already looking at it - I'll message you the moment they decide.`;
     case 'reject': return `Sorry - ${outcome.why}`;
-    case 'no_card': return `You don't have a Detour card right now. If your flight is disrupted, one will appear automatically.`;
+    case 'no_card': return outcome.mode === 'transfer'
+      ? `Detour isn't covering a disrupted trip for you right now. If a flight of yours is cancelled or badly delayed, I'll send you money automatically.`
+      : `You don't have a Detour card right now. If your flight is disrupted, one will appear automatically.`;
     default:
       if (!card) return `Your flights look on track. If anything changes, I'll make sure you're covered.`;
       return outcome.mode === 'transfer' ? `You're covered for ${card.controls.categories.map((k) => policy.categories[k].label.toLowerCase()).join(', ')} until ${fmtWhen(card.controls.activeTo, card.controls.tz)}.` : `Your card: ${facts}.`;

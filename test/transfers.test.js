@@ -70,7 +70,7 @@ test('Ada by transfer: paid before she lands, hotel paid direct, unneeded days c
   await playUntil(e, (x) => x.legs.includes('DA910'));
   assert.equal(byKey(e, 'hotel-2').status, 'CANCELLED');
   assert.equal(byKey(e, 'meals-3').status, 'CANCELLED');
-  assert.match(e.messages.at(-1).text, /cancelled 240 EUR/);
+  assert.match(e.messages.at(-1).text, /DA910.*cancelled.*240 EUR/s);
 
   await playUntil(e, (x) => x.finished);
   assert.equal(e.summary.toTraveller, 180);
