@@ -1,0 +1,15 @@
+{
+  "name": "detour",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Money that follows a stranded traveller: an agent that funds and adapts a controlled virtual card as a flight disruption unfolds.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "sandbox-check": "node sandbox_check.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

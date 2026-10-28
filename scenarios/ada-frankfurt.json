@@ -1,0 +1,48 @@
+{
+  "title": "Ada misses her connection in Frankfurt",
+  "note": "Scripted flight feed and airline emails. Flight numbers and the airline are fictional.",
+  "traveller": {
+    "id": "ada",
+    "first_name": "Ada",
+    "last_name": "Lim",
+    "role": "Field engineer",
+    "email": "ada.lim@northwind.example",
+    "date_of_birth": "1990-04-12",
+    "address": { "line1": "1 Raffles Place", "city": "Singapore", "state": "SG", "postcode": "048616", "country": "SG" }
+  },
+  "start": "2026-11-05T03:30:00Z",
+  "flights": {
+    "DA779": { "id": "DA779", "from": "SIN", "to": "FRA", "sched_dep": "2026-11-05T04:30:00Z", "sched_arr": "2026-11-05T16:45:00Z", "status": "SCHEDULED" },
+    "DA908": { "id": "DA908", "from": "FRA", "to": "LHR", "sched_dep": "2026-11-05T18:50:00Z", "sched_arr": "2026-11-05T19:40:00Z", "status": "SCHEDULED" }
+  },
+  "legs": ["DA779", "DA908"],
+  "events": [
+    { "at": "2026-11-05T03:30:00Z", "type": "note", "scene": "Goal", "text": "Ada flies Singapore to London via Frankfurt for a customer visit. Plan: nothing to do - Detour just watches her flights." },
+    { "at": "2026-11-05T04:35:00Z", "type": "feed", "updates": [{ "id": "DA779", "status": "DEPARTED", "est_dep": "2026-11-05T04:35:00Z" }] },
+
+    { "at": "2026-11-05T10:00:00Z", "type": "note", "scene": "New information", "text": "Over the Indian Ocean, her first flight is running late." },
+    { "at": "2026-11-05T10:00:00Z", "type": "feed", "updates": [{ "id": "DA779", "est_arr": "2026-11-05T19:05:00Z" }] },
+    { "at": "2026-11-05T10:02:00Z", "type": "email", "from": "Demo Air <noreply@demoair.example>", "subject": "DA 779 delayed - your connection DA 908 will be missed", "body": "Dear Ms Lim, your flight DA 779 to Frankfurt is expected to arrive at 20:05 local time. You will miss your connecting flight DA 908 to London. We are working on rebooking you and will be in touch." },
+
+    { "at": "2026-11-05T19:05:00Z", "type": "feed", "updates": [{ "id": "DA779", "status": "LANDED" }] },
+    { "at": "2026-11-05T19:40:00Z", "type": "auth", "label": "dinner", "merchant": "Goethe Grill, FRA Terminal 1", "mcc": "5812", "amount": 18.4, "currency": "EUR" },
+    { "at": "2026-11-05T19:55:00Z", "type": "auth", "label": "headphones", "merchant": "SkyTech Electronics, FRA", "mcc": "5732", "amount": 399, "currency": "EUR" },
+
+    { "at": "2026-11-05T20:10:00Z", "type": "note", "scene": "Revised decision", "text": "No seats to London tonight. Demo Air rebooks Ada on tomorrow's 09:40 flight." },
+    { "at": "2026-11-05T20:10:00Z", "type": "feed", "rebook": { "leg": 1, "flight": { "id": "DA902", "from": "FRA", "to": "LHR", "sched_dep": "2026-11-06T08:40:00Z", "sched_arr": "2026-11-06T09:35:00Z", "status": "SCHEDULED" } } },
+    { "at": "2026-11-05T20:12:00Z", "type": "email", "from": "Demo Air <noreply@demoair.example>", "subject": "You have been rebooked on DA 902", "body": "Dear Ms Lim, we have confirmed you on DA 902 Frankfurt to London, departing tomorrow at 09:40. We apologise for the disruption." },
+    { "at": "2026-11-05T20:45:00Z", "type": "auth", "label": "hotel", "merchant": "Airport Hotel Frankfurt", "mcc": "7011", "amount": 140, "currency": "EUR" },
+    { "at": "2026-11-05T20:46:00Z", "type": "auth", "label": "hotel-topup", "incrementOf": "hotel", "merchant": "Airport Hotel Frankfurt", "mcc": "7011", "amount": 40, "currency": "EUR" },
+
+    { "at": "2026-11-06T05:50:00Z", "type": "note", "scene": "New information", "text": "The morning flight is cancelled too. The next seat is the day after." },
+    { "at": "2026-11-06T05:50:00Z", "type": "feed", "updates": [{ "id": "DA902", "status": "CANCELLED" }] },
+    { "at": "2026-11-06T06:05:00Z", "type": "feed", "rebook": { "leg": 1, "flight": { "id": "DA906", "from": "FRA", "to": "LHR", "sched_dep": "2026-11-07T08:40:00Z", "sched_arr": "2026-11-07T09:35:00Z", "status": "SCHEDULED" } } },
+    { "at": "2026-11-06T06:10:00Z", "type": "traveller", "text": "They cancelled my 9:40 and the next seat is tomorrow morning. I need a second night at the hotel." },
+    { "at": "2026-11-06T06:11:00Z", "type": "await", "text": "Waiting for the travel manager to decide." },
+    { "at": "2026-11-06T20:30:00Z", "type": "auth", "label": "hotel-2", "merchant": "Airport Hotel Frankfurt", "mcc": "7011", "amount": 150, "currency": "EUR" },
+
+    { "at": "2026-11-07T08:45:00Z", "type": "note", "scene": "Close", "text": "Ada boards DA 906. The card switches off as she flies." },
+    { "at": "2026-11-07T08:45:00Z", "type": "feed", "updates": [{ "id": "DA906", "status": "DEPARTED", "est_dep": "2026-11-07T08:45:00Z" }] },
+    { "at": "2026-11-07T09:40:00Z", "type": "feed", "updates": [{ "id": "DA906", "status": "LANDED" }] }
+  ]
+}

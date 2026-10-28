@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Detour</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">⤳</span>
+      <div>
+        <h1>Detour</h1>
+        <p class="tag">Money that follows a stranded traveller</p>
+      </div>
+    </div>
+    <div class="clockbox">
+      <div class="clock" id="clock">--:--</div>
+      <div class="clockzone" id="clockzone">Frankfurt time</div>
+    </div>
+    <div class="controls">
+      <button id="btn-step" class="primary">Next ›</button>
+      <button id="btn-run">Play to next pause ››</button>
+      <button id="btn-reset" class="ghost">Reset</button>
+    </div>
+    <div class="badges" id="badges"></div>
+  </header>
+
+  <section class="scene" id="scene"></section>
+
+  <main class="grid">
+    <!-- Left: the traveller -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="dot dot-traveller"></span><span id="traveller-name">Traveller</span><small>phone</small></h2>
+      <div class="phone">
+        <div class="phone-top">Detour</div>
+        <div class="chat" id="chat"></div>
+        <form class="chat-input" id="chat-form">
+          <input id="chat-text" autocomplete="off" placeholder="Message Detour…  e.g. The hotel wants a 150 EUR deposit">
+          <button type="submit">Send</button>
+        </form>
+      </div>
+      <div class="flights" id="flights"></div>
+    </section>
+
+    <!-- Middle: the card -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="dot dot-card"></span>The card <small id="card-funding"></small></h2>
+      <div id="card"></div>
+      <div id="summary"></div>
+      <h3 class="sub">Payments</h3>
+      <ul class="feed" id="spend"></ul>
+      <details class="try">
+        <summary>Try the card</summary>
+        <form id="buy-form" class="buy">
+          <select id="buy-mcc">
+            <option value="5812">Restaurant (5812)</option>
+            <option value="5814">Fast food (5814)</option>
+            <option value="4121">Taxi (4121)</option>
+            <option value="7011">Hotel (7011)</option>
+            <option value="5813">Bar (5813)</option>
+            <option value="5732">Electronics (5732)</option>
+            <option value="5691">Clothing (5691)</option>
+          </select>
+          <input id="buy-amount" type="number" min="0.01" step="0.01" value="25">
+          <select id="buy-cur"><option>EUR</option><option>GBP</option><option>USD</option></select>
+          <button type="submit">Pay</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- Right: the company -->
+    <section class="panel">
+      <h2 class="panel-title"><span class="dot dot-manager"></span><span id="manager-name">Travel manager</span><small>approvals</small></h2>
+      <div id="approvals"></div>
+      <h3 class="sub">How Detour decided</h3>
+      <ol class="log" id="log"></ol>
+    </section>
+  </main>
+
+  <footer class="foot" id="foot"></footer>
+  <script src="app.js"></script>
+</body>
+</html>

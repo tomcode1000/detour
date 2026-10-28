@@ -1,0 +1,26 @@
+{
+  "company": "Northwind Robotics (demo company)",
+  "travel_manager": "Sam Rivera",
+  "wallet_currency": "USD",
+  "rates_note": "City rates are demo values. Replace with the company's own policy or the US State Department foreign per diem table before real use.",
+  "rules": {
+    "delay_threshold_hours": 2,
+    "min_connection_minutes": 45,
+    "overnight_cutoff_local": "23:00",
+    "auto_nights": 1,
+    "max_auto_raise_pct": 50,
+    "rebook_buffer_hours": 6,
+    "provisional_hours": 24,
+    "lodging_factor": 1.2
+  },
+  "categories": {
+    "meals": { "label": "Meals", "mccs": ["5812", "5814"] },
+    "transport": { "label": "Taxis & local transport", "mccs": ["4121", "4111"] },
+    "lodging": { "label": "Hotel", "mccs": ["7011"] }
+  },
+  "cities": {
+    "FRA": { "city": "Frankfurt", "tz": "Europe/Berlin", "currency": "EUR", "meals_per_day": 60, "transport": 60, "lodging_per_night": 150 },
+    "LHR": { "city": "London", "tz": "Europe/London", "currency": "GBP", "meals_per_day": 55, "transport": 50, "lodging_per_night": 170 },
+    "SIN": { "city": "Singapore", "tz": "Asia/Singapore", "currency": "SGD", "meals_per_day": 90, "transport": 60, "lodging_per_night": 300 }
+  }
+}
