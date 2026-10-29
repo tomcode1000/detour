@@ -72,7 +72,9 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const file = path.join(ROOT, 'public', url.pathname === '/' ? 'index.html' : url.pathname);
+  // Pages: landing, the company app, the traveller app, and the side-by-side demo view.
+  const PAGES = { '/': 'index.html', '/app': 'app.html', '/traveller': 'traveller.html', '/demo': 'demo.html' };
+  const file = path.join(ROOT, 'public', PAGES[url.pathname.replace(/\/$/, '') || '/'] || url.pathname);
   if (!file.startsWith(path.join(ROOT, 'public')) || !existsSync(file)) return send(res, 404, { error: 'not found' });
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
   res.end(readFileSync(file));

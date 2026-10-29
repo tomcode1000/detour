@@ -5,7 +5,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 let S = null;
 let logFilter = 'all';
 const seenPayments = new Set();
-let lastChat = 0;
 
 // ---------------------------------------------------------------- formatting
 const moneyFmt = new Map();
@@ -43,6 +42,7 @@ async function post(path, body) {
   }
 }
 let toastTimer;
+window.DetourToast = toast;
 function toast(text) {
   const t = $('toast');
   t.textContent = text;
@@ -73,20 +73,9 @@ function render(s) {
   setConn('conn-agent', liveAgent ? 'DeepSeek' : 'Stand-in agent', liveAgent ? s.adapters.agent.replace(/^DeepSeek \((.*)\)$/, '$1') : 'No model key', liveAgent, s.adapters.agent);
   $('foot').textContent = `${s.note} ${s.ratesNote}`;
 
-  // Playback
-  const blocked = s.busy || s.playing || s.progress.finished || s.progress.waiting;
-  $('btn-step').disabled = blocked;
-  $('btn-run').disabled = blocked;
-  $('btn-reset').disabled = s.busy || s.playing;
-  $('btn-run').querySelector('span').textContent = s.playing ? 'Playing…' : s.progress.waiting ? 'Waiting for approval' : s.progress.finished ? 'Trip closed' : 'Play';
-
-  // Narration
-  const pct = s.progress.total ? (s.progress.at / s.progress.total) * 100 : 0;
-  $('progress-bar').style.width = `${pct}%`;
-  $('narr-step').textContent = `Event ${s.progress.at} of ${s.progress.total}`;
-  $('narr-scene').textContent = s.scene ? s.scene.name : '';
-  $('narr-text').textContent = s.scene ? s.scene.text : `${s.title}. Press Play, or N for one event at a time.`;
-  $('activity').innerHTML = s.activity ? `<span class="spinner"></span>${esc(s.activity)}…` : s.progress.waiting ? `Waiting for ${esc(s.manager)}` : '';
+  // What Detour is doing right now
+  $('activity').innerHTML = s.activity ? `<span class="spinner"></span>${esc(s.activity)}…` : '';
+  DetourDock.update(s);
 
   renderKpis(s, tz, transfer);
   renderItinerary(s, tz);
@@ -94,7 +83,8 @@ function render(s) {
   renderLog($('log-short'), s.log.slice(-7), tz);
   renderApprovals($('approvals-short'), s, tz, true);
   $('manager-meta').textContent = `${s.manager} · travel manager`;
-  renderChat(s, tz);
+  renderTraveller(s, tz);
+  renderTrips(s, tz);
 
   renderApprovals($('approvals-full'), s, tz, false);
   renderPaymentsFull(s, tz, transfer);
@@ -270,25 +260,36 @@ function renderApprovals(el, s, tz, compactHistory) {
   }).join('');
 }
 
-// Chat
-function renderChat(s, tz) {
-  $('phone-title').textContent = s.traveller.name;
-  $('phone-avatar').textContent = s.traveller.name.split(' ').map((p) => p[0]).join('');
-  const chat = $('chat');
+// Traveller panel: what Ada has been told, and her latest message.
+function renderTraveller(s, tz) {
+  $('trav-meta').textContent = s.traveller.role;
+  const last = (from) => s.messages.filter((m) => m.from === from).at(-1);
+  const toAda = last('detour');
+  const fromAda = last('traveller');
   const writing = s.activity && /^(Messaging|Replying|Reading .*message)/.test(s.activity);
-  if (!s.messages.length && !writing) {
-    chat.innerHTML = `<div class="chat-empty">No messages yet. Detour writes to ${esc(first())} the moment the trip is disrupted.</div>`;
-  } else {
-    chat.innerHTML = s.messages.map((m) => `<div class="msg ${m.from}">${esc(m.text)}<time>${hm(m.at, tz)}</time></div>`).join('')
-      + (writing ? '<div class="typing" aria-label="Detour is writing"><span></span><span></span><span></span></div>' : '');
-  }
-  const count = s.messages.length + (writing ? 1 : 0);
-  if (count !== lastChat) chat.scrollTop = chat.scrollHeight;
-  lastChat = count;
-  const lock = s.busy || s.playing;
-  $('chat-text').disabled = lock;
-  $('chat-form').querySelector('button').disabled = lock;
-  $('chat-text').placeholder = lock ? 'Detour is working…' : `Write as ${first()}, e.g. “The hotel wants a deposit”`;
+  const initials = s.traveller.name.split(' ').map((p) => p[0]).join('');
+  $('trav-card').innerHTML = `
+    <div class="trav">
+      <div class="trav-who"><div class="avatar">${esc(initials)}</div><div><b>${esc(s.traveller.name)}</b><span class="sub">${s.messages.length} message${s.messages.length === 1 ? '' : 's'} · sent to the traveller app</span></div></div>
+      ${writing ? '<div class="trav-msg muted"><span class="spinner"></span> Detour is writing…</div>' : ''}
+      ${toAda ? `<div class="trav-msg"><span class="trav-label">Detour · ${esc(hm(toAda.at, tz))}</span>${esc(toAda.text)}</div>` : `<div class="trav-msg muted">No messages yet. Detour writes the moment the trip breaks.</div>`}
+      ${fromAda && fromAda.at >= (toAda?.at ?? 0) - 6e5 ? `<div class="trav-msg from"><span class="trav-label">${esc(first())} · ${esc(hm(fromAda.at, tz))}</span>${esc(fromAda.text)}</div>` : ''}
+    </div>`;
+}
+
+// Trips list: the live trip plus the others Detour is watching.
+function renderTrips(s, tz) {
+  const live = {
+    name: s.traveller.name, route: routeText(s), flight: s.legs.find((l) => l.status !== 'LANDED') || s.legs.at(-1),
+    status: $('trip-status').textContent, cls: $('trip-status').className.replace('pill', '').trim(), live: true,
+  };
+  const others = (s.otherTrips || []).map((t) => ({ ...t, cls: 'ok' }));
+  $('trips').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Traveller</th><th>Route</th><th>Next flight</th><th>Status</th><th class="r">Detour</th></tr></thead><tbody>
+    <tr class="row-link" data-goto="overview"><td><b>${esc(live.name)}</b><span class="sub">${esc(s.traveller.role)}</span></td><td>${esc(live.route)}</td>
+      <td>${esc(live.flight.id)}<span class="sub">${esc(dayHm(live.flight.est_dep, tz))}</span></td><td><span class="pill ${live.cls}">${esc(live.status)}</span></td>
+      <td class="r">${s.card ? `<b>${money(sum((s.payments || []).filter((p) => p.status === 'SENT')) || s.card.spent || 0, s.card.controls.currency)}</b><span class="sub">paid out</span>` : '<span class="sub">Watching</span>'}</td></tr>
+    ${others.map((t) => `<tr><td><b>${esc(t.name)}</b><span class="sub">${esc(t.role)}</span></td><td>${esc(t.route)}</td><td>${esc(t.flight)}<span class="sub">${esc(t.when)}</span></td><td><span class="pill ok">On track</span></td><td class="r"><span class="sub">Watching</span></td></tr>`).join('')}
+  </tbody></table></div>`;
 }
 
 // Log
@@ -358,27 +359,12 @@ document.addEventListener('click', (e) => {
   }
 });
 
-$('btn-step').onclick = () => post('/api/step');
-$('btn-run').onclick = () => post('/api/run');
-$('btn-reset').onclick = () => { seenPayments.clear(); post('/api/reset'); };
-$('chat-form').onsubmit = (e) => {
-  e.preventDefault();
-  const text = $('chat-text').value.trim();
-  if (!text || S?.busy || S?.playing) return;
-  $('chat-text').value = '';
-  post('/api/chat', { text });
-};
 $('buy-form').onsubmit = (e) => {
   e.preventDefault();
   const mcc = $('buy-mcc').value;
   post('/api/purchase', { mcc, amount: $('buy-amount').value, currency: $('buy-cur').value, merchant: `${MCC_NAMES[mcc]} (test)` });
 };
-// Shortcuts for recording: N = next event, P = play.
-document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key === 'n' || e.key === 'N') { if (!$('btn-step').disabled) $('btn-step').click(); }
-  if (e.key === 'p' || e.key === 'P') { if (!$('btn-run').disabled) $('btn-run').click(); }
-});
+DetourDock.mount();
 
 {
   let saved = new URLSearchParams(location.search).get('view');

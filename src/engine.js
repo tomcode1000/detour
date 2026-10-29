@@ -562,6 +562,7 @@ export class Engine {
       manager: this.policy.travel_manager,
       ratesNote: this.policy.rates_note,
       traveller: { name: `${this.scenario.traveller.first_name} ${this.scenario.traveller.last_name}`, role: this.scenario.traveller.role },
+      otherTrips: this.scenario.otherTrips || [],
       legs: this.legs.map((id) => ({ ...this.flights[id], statusText: this.describeFlight(this.flights[id]) })),
       disruption: this.disruption,
       card: this.card && {

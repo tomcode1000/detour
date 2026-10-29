@@ -309,3 +309,40 @@ tr.fresh td { animation: flash 1.6s ease-out; }
   .leg { grid-template-columns: 1fr auto; }
   .leg-code { grid-column: 1 / -1; }
 }
+
+/* ---------------------------------------------------------------- app additions */
+a.brand { color: inherit; text-decoration: none; }
+a.btn { text-decoration: none; }
+.top-right .activity { max-width: 280px; }
+.row-link { cursor: pointer; }
+.row-link:hover td { background: var(--surface-2); }
+.trav { padding: 14px 18px; display: grid; gap: 10px; }
+.trav-who { display: flex; align-items: center; gap: 10px; }
+.trav-who .sub { display: block; color: var(--muted); font-size: 12px; }
+.trav-msg { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-soft); font-size: 12.5px; line-height: 1.5; }
+.trav-msg.from { background: var(--accent-soft); border-color: var(--accent-line); }
+.trav-msg.muted { color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.trav-label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+
+/* ---------------------------------------------------------------- demo dock */
+.dock {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 14px; max-width: min(960px, calc(100vw - 32px));
+  padding: 8px 8px 8px 12px; border-radius: 12px; background: #0d1117; color: #e6e9ee;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.45); font-size: 12.5px;
+}
+.dock.inline { position: static; transform: none; max-width: none; width: 100%; box-shadow: none; border-radius: 0; padding: 10px 16px; }
+.dock-label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.dock-tag { padding: 2px 7px; border-radius: 5px; background: #e9a23b; color: #1d1405; font-weight: 600; font-size: 11px; letter-spacing: 0.3px; }
+.dock-step { color: #8b95a3; font-variant-numeric: tabular-nums; }
+.dock-scene { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-scene b { color: #5cc8bc; font-weight: 600; margin-right: 6px; text-transform: uppercase; font-size: 11px; letter-spacing: 0.6px; }
+.dock-activity { display: inline-flex; align-items: center; gap: 6px; color: #8b95a3; white-space: nowrap; }
+.dock-activity:empty { display: none; }
+.dock-buttons { display: flex; gap: 6px; }
+.dock-buttons button { height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid #2b333d; background: #161b22; color: #e6e9ee; font-weight: 500; }
+.dock-buttons button:hover:not(:disabled) { background: #1d252f; }
+.dock-buttons button.go { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dock-buttons button:disabled { opacity: 0.45; cursor: default; }
+@media (max-width: 760px) { .dock-scene, .dock-activity { display: none; } }
+body:has(.dock:not(.inline)) .foot { padding-bottom: 88px; }
