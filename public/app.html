@@ -2,140 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Detour · Travel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Detour">
+  <title>Detour</title>
+  <script>
+    // Opening the installed app goes straight to the role chosen last time (unless ?choose).
+    try {
+      const role = localStorage.getItem('detour.role');
+      if (role && !location.search.includes('choose')) location.replace(role === 'manager' ? '/manager' : '/traveller');
+    } catch {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="mobile.css">
 </head>
-<body>
-<div class="app">
-
-  <!-- Sidebar -->
-  <aside class="side">
-    <a class="brand" href="/">
-      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 21.5c3.2 0 4.2-2.2 5.4-5.2 1.3-3.2 2.6-5.8 6.6-5.8h2.5" /><path d="M19.5 7.5l3 3-3 3" /></svg>
-      <span>Detour</span>
-    </a>
-    <div class="org">
-      <div class="org-avatar">N</div>
-      <div><div class="org-name" id="org-name">Northwind Robotics</div><div class="org-sub">Travel · Sandbox</div></div>
+<body class="tv-body">
+  <div class="tv ln">
+    <div class="ln-in">
+      <img class="ln-logo" src="/icons/icon-192.png" alt="">
+      <div>
+        <h1>Money that follows you when a flight breaks.</h1>
+        <p>Detour pays for meals, taxis and a hotel when a trip is disrupted, inside your company's travel policy.</p>
+      </div>
+      <div class="ln-roles">
+        <a class="ln-role" href="/traveller">
+          <i><svg viewBox="0 0 24 24"><path d="M3 12.5 21 6l-4.5 15-4-6.5z"/><path d="m12.5 14.5 4-4"/></svg></i>
+          <div><b>I'm travelling</b><span>See what's covered and talk to Detour</span></div>
+          <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+        </a>
+        <a class="ln-role" href="/manager">
+          <i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></i>
+          <div><b>I manage travel</b><span>Trips, approvals and payments for your company</span></div>
+          <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+      <p class="ln-foot">Demo company: Northwind Robotics · Airwallex sandbox</p>
     </div>
-    <nav class="nav" id="nav">
-      <button data-view="trips"><svg viewBox="0 0 24 24"><path d="M3 12.5 21 6l-4.5 15-4-6.5z"/><path d="m12.5 14.5 4-4"/></svg>Trips</button>
-      <button data-view="overview" class="active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Live trip</button>
-      <button data-view="approvals"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>Approvals<span class="count" id="nav-approvals"></span></button>
-      <button data-view="payments"><svg viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></svg>Payments</button>
-      <button data-view="activity"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Decision log</button>
-      <button data-view="policy"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6z"/></svg>Policy</button>
-    </nav>
-    <div class="side-foot">
-      <div class="side-label">Connections</div>
-      <div class="conn" id="conn-funding"><span class="dot"></span><div><span class="conn-text">Funding</span><small></small></div></div>
-      <div class="conn" id="conn-agent"><span class="dot"></span><div><span class="conn-text">Agent</span><small></small></div></div>
-    </div>
-  </aside>
-
-  <!-- Main -->
-  <div class="main">
-    <header class="topbar">
-      <div class="trip-head">
-        <div class="crumbs">Trips <span>/</span> <b id="crumb-name">Traveller</b></div>
-        <div class="trip-title">
-          <h1 id="trip-name">Traveller</h1>
-          <span class="route" id="trip-route"></span>
-          <span class="pill" id="trip-status">On track</span>
-        </div>
-      </div>
-      <div class="top-right">
-        <span class="activity" id="activity"></span>
-        <div class="clock"><div id="clock">--</div><small id="clockzone">Local time</small></div>
-        <a class="btn" href="/traveller" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span>Traveller app</span></a>
-      </div>
-    </header>
-
-    <!-- Trips -->
-    <section class="view" data-view="trips">
-      <div class="page-head"><h2>Trips</h2><p>Every trip on file is watched against the live flight status feed. Detour only acts when one breaks.</p></div>
-      <div class="card"><div id="trips"></div></div>
-    </section>
-
-    <!-- Live trip -->
-    <section class="view active" data-view="overview">
-      <div class="ov">
-        <div class="col">
-          <div class="card kpis" id="kpis"></div>
-
-          <div class="card">
-            <div class="card-head"><h2>Itinerary</h2><span class="meta" id="feed-note">Flight status feed</span></div>
-            <div id="itinerary"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2 id="money-title">Payment plan</h2><span class="meta" id="money-meta"></span><button class="link" data-goto="payments">All payments</button></div>
-            <div id="money-table"></div>
-            <form id="buy-form" class="buy" hidden>
-              <span class="buy-label">Try the card</span>
-              <select id="buy-mcc">
-                <option value="5812">Restaurant · 5812</option>
-                <option value="4121">Taxi · 4121</option>
-                <option value="7011">Hotel · 7011</option>
-                <option value="5813">Bar · 5813</option>
-                <option value="5732">Electronics · 5732</option>
-              </select>
-              <input id="buy-amount" type="number" min="0.01" step="0.01" value="25" aria-label="Amount">
-              <select id="buy-cur" aria-label="Currency"><option>EUR</option><option>GBP</option><option>USD</option></select>
-              <button type="submit" class="btn">Charge</button>
-            </form>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>How Detour decided</h2><span class="meta">Latest</span><button class="link" data-goto="activity">Full log</button></div>
-            <ol class="log" id="log-short"></ol>
-          </div>
-        </div>
-
-        <div class="col rail">
-          <div class="card" id="approvals-card">
-            <div class="card-head"><h2>Approvals</h2><span class="meta" id="manager-meta"></span></div>
-            <div id="approvals-short"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><h2>Traveller</h2><span class="meta" id="trav-meta"></span><a class="link" href="/traveller" target="_blank" rel="noopener">Open app</a></div>
-            <div id="trav-card"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="view" data-view="approvals">
-      <div class="page-head"><h2>Approvals</h2><p>Anything outside policy waits here. Each request is bound to the exact amount, merchants, expiry and evidence the manager saw.</p></div>
-      <div class="card"><div id="approvals-full"></div></div>
-    </section>
-
-    <section class="view" data-view="payments">
-      <div class="page-head"><h2>Payments</h2><p id="payments-intro"></p></div>
-      <div class="card"><div id="payments-full"></div></div>
-    </section>
-
-    <section class="view" data-view="activity">
-      <div class="page-head"><h2>Decision log</h2><p>Every input Detour received and every decision it made, in order.</p></div>
-      <div class="filters" id="log-filters"></div>
-      <div class="card"><ol class="log full" id="log-full"></ol></div>
-    </section>
-
-    <section class="view" data-view="policy">
-      <div class="page-head"><h2>Policy</h2><p>The rules set every amount. The model can only propose a change; these numbers decide.</p></div>
-      <div class="policy-grid" id="policy"></div>
-    </section>
-
-    <footer class="foot" id="foot"></footer>
   </div>
-</div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="demo-dock.js"></script>
-<script src="app.js"></script>
+  <script src="mobile.js"></script>
 </body>
 </html>

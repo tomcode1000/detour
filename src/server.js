@@ -26,7 +26,10 @@ engine.onChange(() => {
   for (const res of clients) res.write(data);
 });
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
+};
 
 function readBody(req) {
   return new Promise((resolve) => {
@@ -72,11 +75,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // Pages: landing, the company app, the traveller app, and the side-by-side demo view.
-  const PAGES = { '/': 'index.html', '/app': 'app.html', '/traveller': 'traveller.html', '/demo': 'demo.html' };
+  // Website pages (landing, download, demo) and the installable phone app (launcher, traveller, manager).
+  const PAGES = {
+    '/': 'index.html', '/download': 'download.html', '/demo': 'demo.html',
+    '/app': 'app.html', '/traveller': 'traveller.html', '/manager': 'manager.html',
+  };
   const file = path.join(ROOT, 'public', PAGES[url.pathname.replace(/\/$/, '') || '/'] || url.pathname);
   if (!file.startsWith(path.join(ROOT, 'public')) || !existsSync(file)) return send(res, 404, { error: 'not found' });
-  res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
+  const headers = { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' };
+  if (url.pathname === '/sw.js') headers['Cache-Control'] = 'no-cache';
+  res.writeHead(200, headers);
   res.end(readFileSync(file));
 });
 

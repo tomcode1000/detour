@@ -1,39 +1,14 @@
 // Detour traveller app: what the stranded traveller sees on their phone.
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const params = new URLSearchParams(location.search);
-if (params.has('embed')) document.body.classList.add('embed');
-
-const CITY = { SIN: 'Singapore', FRA: 'Frankfurt', LHR: 'London' };
-const moneyFmt = new Map();
-function money(n, cur) {
-  if (n == null || !cur) return '—';
-  if (!moneyFmt.has(cur)) moneyFmt.set(cur, new Intl.NumberFormat('en-GB', { style: 'currency', currency: cur }));
-  return moneyFmt.get(cur).format(n);
-}
-const fmt = (ms, tz, opts) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', ...opts }).format(new Date(ms));
-const hm = (ms, tz) => fmt(ms, tz, { hour: '2-digit', minute: '2-digit' });
-const dayHm = (ms, tz) => fmt(ms, tz, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-const sum = (rows, f = (l) => l.amount) => rows.reduce((a, l) => a + f(l), 0);
-
+// Shared helpers come from mobile.js.
 let S = null;
 let screen = params.get('tab') === 'messages' ? 'messages' : 'trip';
+try { localStorage.setItem('detour.role', 'traveller'); } catch {}
 let seen = 0;
 let lastCount = 0;
-
-let toastTimer;
-window.DetourToast = (text) => {
-  const t = $('toast');
-  t.textContent = text;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
-};
 
 function render(s) {
   S = s;
   const tz = s.tz;
-  $('tv-org').textContent = s.company.replace(/\s*\(.*\)/, '');
   renderHero(s, tz);
   renderFlight(s, tz);
   renderHotel(s);
@@ -109,7 +84,7 @@ function renderHotel(s) {
   card.hidden = false;
   const name = rows[0].payeeName.replace(/\s+GmbH$/, '');
   card.innerHTML = `<div class="tv-card-head"><h2>Hotel</h2><span>${rows.length} night${rows.length === 1 ? '' : 's'}</span></div>
-    <div class="tv-hotel"><b>${esc(name)}</b><p>Paid directly by ${esc(S.company.replace(/\s*\(.*\)/, ''))}. Just give your name at the desk; there is nothing to pay and nothing to claim.</p>
+    <div class="tv-hotel"><b>${esc(name)}</b><p>Paid directly by ${esc(company(S))}. Just give your name at the desk; there is nothing to pay and nothing to claim.</p>
     <span class="pill ok tag">Room paid</span></div>`;
 }
 
@@ -159,35 +134,19 @@ function renderChat(s, tz) {
   $('tv-text').placeholder = lock ? 'Detour is working…' : 'Message Detour';
 }
 
-function show(name) {
-  screen = name;
-  document.querySelectorAll('.tv-screen').forEach((el) => el.classList.toggle('active', el.dataset.screen === name));
-  document.querySelectorAll('#tv-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
-  if (S) render(S);
-  if (name === 'messages') $('tv-chat').scrollTop = $('tv-chat').scrollHeight;
-}
-$('tv-tabs').onclick = (e) => { const b = e.target.closest('button[data-screen]'); if (b) show(b.dataset.screen); };
 
 $('tv-form').onsubmit = async (e) => {
   e.preventDefault();
   const text = $('tv-text').value.trim();
   if (!text || S?.busy || S?.playing) return;
   $('tv-text').value = '';
-  try {
-    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-    const j = await r.json();
-    if (!j.ok) window.DetourToast(j.error || 'Message not sent.');
-  } catch {
-    window.DetourToast('Message not sent: no connection.');
-  }
+  await api('/api/chat', { text });
 };
 
-show(screen);
+setupTabs(screen, (name) => {
+  screen = name;
+  if (S) render(S);
+  if (name === 'messages') $('tv-chat').scrollTop = $('tv-chat').scrollHeight;
+});
 DetourDock.mount();
-if (params.has('snapshot')) {
-  fetch('/api/state').then((r) => r.json()).then(render);
-} else {
-  const events = new EventSource('/events');
-  events.onmessage = (e) => render(JSON.parse(e.data));
-  events.onerror = () => window.DetourToast('Reconnecting…');
-}
+connect(render);

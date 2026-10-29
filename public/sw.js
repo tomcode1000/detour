@@ -1,0 +1,30 @@
+// Detour service worker: keeps the app shell available so the installed app opens instantly.
+// Live data (/api, /events) always goes to the network.
+const CACHE = 'detour-shell-v1';
+const SHELL = [
+  '/app', '/traveller', '/manager',
+  '/ui.css', '/mobile.css', '/mobile.js', '/traveller.js', '/manager.js', '/demo-dock.js',
+  '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+});
+
+// Network first (so a new deploy shows straight away), the cached shell when offline.
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api') || url.pathname === '/events') return;
+  e.respondWith(
+    fetch(e.request)
+      .then((res) => {
+        if (res.ok && SHELL.includes(url.pathname)) caches.open(CACHE).then((c) => c.put(url.pathname, res.clone()));
+        return res;
+      })
+      .catch(() => caches.match(url.pathname).then((hit) => hit || caches.match('/app'))),
+  );
+});

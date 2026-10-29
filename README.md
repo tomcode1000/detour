@@ -15,6 +15,17 @@ npm start          # http://localhost:4100
 npm test           # rules + full-story tests
 ```
 
+| Address | What it is |
+|---|---|
+| `/` | Landing page (website) |
+| `/download` | Get the app: QR code, install button, Android and iPhone steps (website) |
+| `/app` | The installable phone app. First screen chooses the role and remembers it |
+| `/traveller` | Traveller app: what's covered, money received, hotel, next flight, messages |
+| `/manager` | Travel manager app: trips, approvals, payments, decision log, policy |
+| `/demo` | Both phones side by side with the story controls, for the demo video |
+
+The phone app is a Progressive Web App (manifest, icons, service worker): on Android it installs from Chrome, on iPhone via Safari's Add to Home Screen. Installing from a phone needs the site online over HTTPS.
+
 Settings in `.env` (git-ignored):
 
 | Variable | What it does |
