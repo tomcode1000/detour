@@ -1,230 +1,370 @@
 // Detour demo page: renders the engine snapshot pushed over /events.
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const money = (n, cur) => `${Number(n).toFixed(2)} ${cur || ''}`.trim();
 
-let state = null;
-let lastChatCount = 0;
-let lastLogCount = 0;
+let S = null;
+let logFilter = 'all';
+const seenPayments = new Set();
+let lastChat = 0;
 
-function fmt(ms, tz, opts) {
-  return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', ...opts }).format(new Date(ms));
+// ---------------------------------------------------------------- formatting
+const moneyFmt = new Map();
+function money(n, cur) {
+  if (n == null || !cur) return '—';
+  if (!moneyFmt.has(cur)) moneyFmt.set(cur, new Intl.NumberFormat('en-GB', { style: 'currency', currency: cur }));
+  return moneyFmt.get(cur).format(n);
 }
+// Big number with smaller cents, e.g. €180<span>.00</span>
+function bigMoney(n, cur) {
+  const s = money(n, cur);
+  const m = s.match(/^(.*?)([.,]\d{2})(\D*)$/);
+  return m ? `${esc(m[1])}<span class="cents">${esc(m[2])}</span>${esc(m[3])}` : esc(s);
+}
+const fmt = (ms, tz, opts) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', ...opts }).format(new Date(ms));
 const hm = (ms, tz) => fmt(ms, tz, { hour: '2-digit', minute: '2-digit' });
 const dayHm = (ms, tz) => fmt(ms, tz, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+const longWhen = (ms, tz) => fmt(ms, tz, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const first = () => S.traveller.name.split(' ')[0];
+const sum = (rows) => rows.reduce((a, l) => a + l.amount, 0);
 
+const CITY = { SIN: 'Singapore', FRA: 'Frankfurt', LHR: 'London' };
+const TZ_CITY = { 'Europe/Berlin': 'Frankfurt', 'Europe/London': 'London', 'Asia/Singapore': 'Singapore' };
+
+// ---------------------------------------------------------------- server calls
 async function post(path, body) {
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
-  return res.json();
+  try {
+    const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const json = await res.json();
+    if (!json.ok) toast(json.error || 'Something went wrong.');
+    return json;
+  } catch {
+    toast('Lost connection to the Detour server.');
+    return { ok: false };
+  }
+}
+let toastTimer;
+function toast(text) {
+  const t = $('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
 }
 
-const DECLINE = {
-  MERCHANT_CATEGORY_NOT_ALLOWED: 'Merchant type not allowed on this card',
-  LIMIT_EXCEEDED: 'Over the card limit',
-  OUT_OF_ALLOWED_TIME_RANGE: 'Outside the card\'s active time',
-  CURRENCY_NOT_ALLOWED: 'Wrong currency for this card',
-  CARD_INACTIVE: 'Card switched off',
-  CARD_CLOSED: 'Card closed',
-};
-const MCC_NAMES = { 5812: 'Restaurant', 5814: 'Fast food', 4121: 'Taxi', 4111: 'Local transport', 7011: 'Hotel', 5813: 'Bar', 5732: 'Electronics', 5691: 'Clothing' };
-
+// ---------------------------------------------------------------- render
 function render(s) {
-  state = s;
+  S = s;
   const tz = s.tz;
-  $('clock').textContent = dayHm(s.clock, tz);
-  $('clockzone').textContent = `${s.disruption ? s.legs[s.disruption.legIndex]?.from : 'FRA'} · ${tz.split('/')[1].replace('_', ' ')} time`;
-  $('traveller-name').textContent = s.traveller.name;
-  $('manager-name').textContent = `${s.manager} · travel manager`;
-
-  const fundingWarn = !s.adapters.fundingName.startsWith('airwallex');
-  const agentWarn = s.adapters.agentName !== 'deepseek';
-  $('badges').innerHTML = `
-    <span class="badge ${fundingWarn ? 'warn' : 'ok'}">Funding: ${esc(s.adapters.funding)}</span>
-    <span class="badge ${agentWarn ? 'warn' : 'ok'}">Agent: ${esc(s.adapters.agent)}</span>`;
-  $('card-funding').textContent = s.adapters.funding;
-
-  $('btn-step').disabled = s.busy || s.progress.finished || s.progress.waiting;
-  $('btn-run').disabled = s.busy || s.progress.finished || s.progress.waiting;
-  $('btn-step').textContent = s.progress.waiting ? 'Waiting for approval' : s.progress.finished ? 'Done' : `Next › (${s.progress.at}/${s.progress.total})`;
-
-  $('scene').className = `scene${s.scene ? '' : ' empty'}`;
-  $('scene').innerHTML = s.scene ? `<b>${esc(s.scene.name)}</b><span>${esc(s.scene.text)}</span>` : `<span>${esc(s.title)} — press Next to start.</span>`;
-
-  renderChat(s, tz);
-  renderFlights(s, tz);
   const transfer = s.mode === 'transfer';
-  $('money-title').textContent = transfer ? 'The money' : 'The card';
-  $('spend-title').textContent = transfer ? 'Payment plan' : 'Payments';
-  $('try').style.display = transfer ? 'none' : '';
-  if (transfer) { renderPlan(s, tz); renderPayments(s, tz); } else { renderCard(s, tz); renderSpend(s, tz); }
-  renderApprovals(s, tz);
-  renderLog(s, tz);
-  $('foot').textContent = `${s.note} ${s.ratesNote} Company: ${s.company}.`;
+
+  // Shell
+  $('org-name').textContent = s.company.replace(/\s*\(.*\)/, '');
+  $('crumb-name').textContent = s.traveller.name;
+  $('trip-name').textContent = s.traveller.name;
+  $('trip-route').textContent = routeText(s);
+  setStatusPill(s);
+  $('clock').textContent = longWhen(s.clock, tz);
+  $('clockzone').textContent = `${TZ_CITY[tz] || tz.split('/')[1].replace('_', ' ')} time`;
+  const pending = s.approvals.filter((a) => a.status === 'PENDING').length;
+  $('nav-approvals').textContent = pending || '';
+  const liveMoney = s.adapters.fundingName.startsWith('airwallex');
+  setConn('conn-funding', liveMoney ? 'Airwallex sandbox' : 'Simulated money', s.mode === 'transfer' ? 'Transfers' : 'Virtual card', liveMoney, s.adapters.funding);
+  const liveAgent = s.adapters.agentName === 'deepseek';
+  setConn('conn-agent', liveAgent ? 'DeepSeek' : 'Stand-in agent', liveAgent ? s.adapters.agent.replace(/^DeepSeek \((.*)\)$/, '$1') : 'No model key', liveAgent, s.adapters.agent);
+  $('foot').textContent = `${s.note} ${s.ratesNote}`;
+
+  // Playback
+  const blocked = s.busy || s.playing || s.progress.finished || s.progress.waiting;
+  $('btn-step').disabled = blocked;
+  $('btn-run').disabled = blocked;
+  $('btn-reset').disabled = s.busy || s.playing;
+  $('btn-run').querySelector('span').textContent = s.playing ? 'Playing…' : s.progress.waiting ? 'Waiting for approval' : s.progress.finished ? 'Trip closed' : 'Play';
+
+  // Narration
+  const pct = s.progress.total ? (s.progress.at / s.progress.total) * 100 : 0;
+  $('progress-bar').style.width = `${pct}%`;
+  $('narr-step').textContent = `Event ${s.progress.at} of ${s.progress.total}`;
+  $('narr-scene').textContent = s.scene ? s.scene.name : '';
+  $('narr-text').textContent = s.scene ? s.scene.text : `${s.title}. Press Play, or N for one event at a time.`;
+  $('activity').innerHTML = s.activity ? `<span class="spinner"></span>${esc(s.activity)}…` : s.progress.waiting ? `Waiting for ${esc(s.manager)}` : '';
+
+  renderKpis(s, tz, transfer);
+  renderItinerary(s, tz);
+  renderMoney(s, tz, transfer);
+  renderLog($('log-short'), s.log.slice(-7), tz);
+  renderApprovals($('approvals-short'), s, tz, true);
+  $('manager-meta').textContent = `${s.manager} · travel manager`;
+  renderChat(s, tz);
+
+  renderApprovals($('approvals-full'), s, tz, false);
+  renderPaymentsFull(s, tz, transfer);
+  renderLogFull(s, tz);
+  renderPolicy(s);
 }
 
-function renderChat(s, tz) {
-  const chat = $('chat');
-  if (!s.messages.length) {
-    chat.innerHTML = '<div class="chat-empty">Nothing yet. Detour messages Ada the moment her trip breaks.</div>';
-    lastChatCount = 0;
-    return;
-  }
-  chat.innerHTML = s.messages.map((m) => `<div class="bubble ${m.from}">${esc(m.text)}<time>${hm(m.at, tz)}</time></div>`).join('');
-  if (s.messages.length !== lastChatCount) chat.scrollTop = chat.scrollHeight;
-  lastChatCount = s.messages.length;
+function routeText(s) {
+  const stops = [s.legs[0]?.from, ...s.legs.map((l) => l.to)].filter(Boolean);
+  return stops.map((c) => CITY[c] || c).join(' → ');
 }
 
-function renderFlights(s, tz) {
-  $('flights').innerHTML = s.legs.map((f) => {
-    const bad = f.status === 'CANCELLED' || /late/.test(f.statusText);
-    const done = f.status === 'LANDED' || f.status === 'DEPARTED';
-    return `<div class="flight ${bad ? 'bad' : done ? 'done' : ''}">
-      <span><b>${esc(f.id)}</b> ${esc(f.from)} → ${esc(f.to)}<br><small>departs ${dayHm(f.est_dep, tz)}</small></span>
-      <span class="st">${esc(f.statusText)}</span></div>`;
-  }).join('');
+function setStatusPill(s) {
+  const pill = $('trip-status');
+  let cls = 'ok';
+  let text = 'On track';
+  if (s.summary) { cls = 'plain'; text = 'Trip closed'; }
+  else if (s.disruption && !s.disruption.closed) { cls = 'warn'; text = `Disrupted · ${CITY[s.disruption.airport] || s.disruption.airport}`; }
+  else if (s.disruption?.closed) { cls = 'info'; text = 'In the air'; }
+  pill.className = `pill ${cls}`;
+  pill.textContent = text;
 }
 
-function renderCard(s, tz) {
+function setConn(id, label, sub, live, full) {
+  const el = $(id);
+  el.classList.toggle('live', live);
+  el.querySelector('.conn-text').textContent = label;
+  el.querySelector('small').textContent = sub;
+  el.title = `${full} (${live ? 'live' : 'simulated'})`;
+}
+
+// KPI strip
+function renderKpis(s, tz, transfer) {
   const c = s.card;
-  if (!c) {
-    $('card').innerHTML = `<div class="card-empty">No card yet.<br><small>Detour is watching ${esc(s.traveller.name.split(' ')[0])}'s flights. Nothing to do while the trip is on track.</small></div>`;
-  } else {
-    const k = c.controls;
-    const used = Math.min(100, (c.spent / k.limit) * 100);
-    const live = c.status === 'ACTIVE';
-    $('card').innerHTML = `
-      <div class="vcard ${live ? '' : 'off'}">
-        <div class="row"><span class="name">Detour · ${esc(s.traveller.name)}</span><span class="pill ${live ? 'live' : ''}">${esc(c.status === 'INACTIVE' ? 'SWITCHED OFF' : c.status)}</span></div>
-        <div class="amount">${money(c.remaining, k.currency)}</div>
-        <div class="left">left of ${money(k.limit, k.currency)} · ${esc(k.city)}</div>
-        <div class="bar"><span style="width:${used}%"></span></div>
-        <div class="row"><span>•••• ${esc(c.last4 || '----')}</span><span>until ${dayHm(k.activeTo, tz)}</span></div>
-      </div>
-      <div class="chips">${c.categoryLabels.map((l) => `<span class="chip">${esc(l)}</span>`).join('')}</div>
-      <dl class="facts">
-        <dt>Meals</dt><dd>${money(k.breakdown.meals, k.currency)}</dd>
-        <dt>Taxis</dt><dd>${money(k.breakdown.transport, k.currency)}</dd>
-        ${k.breakdown.lodging ? `<dt>Hotel</dt><dd>${money(k.breakdown.lodging, k.currency)} · ${k.nights} night${k.nights > 1 ? 's' : ''}</dd>` : ''}
-        ${k.breakdown.extras ? `<dt>Approved extra</dt><dd>${money(k.breakdown.extras, k.currency)}</dd>` : ''}
-        <dt>Merchant codes</dt><dd>${esc(k.mccs.join(', '))}</dd>
-      </dl>`;
-    $('buy-cur').value = k.currency;
-  }
-  const sm = s.summary;
-  $('summary').innerHTML = sm ? `<div class="summary"><h4>Trip closed · spend summary</h4>
-    Spent <b>${money(sm.spent, sm.currency)}</b> of ${money(sm.limit, sm.currency)} over ${sm.nights} night${sm.nights === 1 ? '' : 's'}.<br>
-    ${Object.entries(sm.byCategory).map(([k, v]) => `${esc(k)}: ${money(v, sm.currency)}`).join(' · ')}<br>
-    ${sm.declined} payment${sm.declined === 1 ? '' : 's'} blocked · ${sm.approvals} manager approval${sm.approvals === 1 ? '' : 's'} · no receipts needed.</div>` : '';
-}
-
-const sumOf = (rows) => rows.reduce((a, l) => a + l.amount, 0);
-
-function renderPlan(s, tz) {
-  const c = s.card;
-  const pay = s.payments || [];
-  if (!c) {
-    $('card').innerHTML = `<div class="card-empty">Nothing paid yet.<br><small>Detour is watching ${esc(s.traveller.name.split(' ')[0])}'s flights. Nothing to do while the trip is on track.</small></div>`;
-  } else {
-    const k = c.controls;
-    const live = c.status === 'ACTIVE';
+  const cur = c?.controls.currency || 'EUR';
+  let tiles;
+  if (transfer) {
+    const pay = s.payments || [];
     const sent = pay.filter((l) => l.status === 'SENT');
     const sched = pay.filter((l) => l.status === 'SCHEDULED');
     const cancelled = pay.filter((l) => l.status === 'CANCELLED');
-    const fees = sent.reduce((a, l) => a + (l.fee || 0), 0);
-    $('card').innerHTML = `
-      <div class="plan">
-        <div class="row" style="margin-top:0"><span>${esc(k.city)} · until ${dayHm(k.activeTo, tz)}</span><span class="status ${live ? '' : 'off'}">${live ? 'COVERING' : c.status === 'CLOSED' ? 'CLOSED' : 'STOPPED'}</span></div>
-        <div class="big">${money(sumOf(sent), k.currency)}</div>
-        <div class="row" style="margin-top:0"><span>paid out so far</span><span></span></div>
-        <div class="row"><span>To ${esc(s.traveller.name.split(' ')[0])} (meals &amp; taxis)</span><span>${money(sumOf(sent.filter((l) => l.role === 'traveller')), k.currency)}</span></div>
-        <div class="row"><span>Straight to the hotel</span><span>${money(sumOf(sent.filter((l) => l.role === 'hotel')), k.currency)}</span></div>
-        <div class="row"><span>Scheduled, cancellable</span><span>${money(sumOf(sched), k.currency)}</span></div>
-        <div class="row saved"><span>Cancelled, never left the company</span><span>${money(sumOf(cancelled), k.currency)}</span></div>
-        <div class="row"><span>Airwallex fees</span><span>${money(fees, k.currency)}</span></div>
-      </div>
-      <div class="chips">${c.categoryLabels.map((l) => `<span class="chip">${esc(l)}</span>`).join('')}<span class="chip">${k.nights} night${k.nights === 1 ? '' : 's'}</span></div>`;
+    tiles = [
+      { label: 'Paid out', value: bigMoney(sum(sent), cur), sub: `${sent.length} payment${sent.length === 1 ? '' : 's'} · to ${esc(first())} and the hotel` },
+      { label: 'Scheduled · cancellable', value: bigMoney(sum(sched), cur), sub: sched.length ? `next ${esc(dayHm(Math.min(...sched.map((l) => l.payAt)), tz))}` : 'nothing pending' },
+      { label: 'Never paid out', value: bigMoney(sum(cancelled), cur), sub: 'cancelled before payment', cls: cancelled.length ? 'saved' : '' },
+      { label: 'Covered until', value: c ? esc(dayHm(c.controls.activeTo, tz)) : '—', sub: c ? `${c.controls.nights} night${c.controls.nights === 1 ? '' : 's'} · ${esc(c.controls.city)}` : 'no disruption' },
+    ];
+  } else {
+    tiles = [
+      { label: 'Left on card', value: c ? bigMoney(c.remaining, cur) : '—', sub: c ? `of ${money(c.controls.limit, cur)}` : 'no card yet' },
+      { label: 'Spent', value: c ? bigMoney(c.spent, cur) : '—', sub: `${s.transactions.filter((t) => t.status === 'APPROVED').length} approved` },
+      { label: 'Blocked', value: String(s.transactions.filter((t) => t.status !== 'APPROVED').length), sub: 'payments declined' },
+      { label: 'Card expires', value: c ? esc(dayHm(c.controls.activeTo, tz)) : '—', sub: c ? esc(c.status.toLowerCase()) : '' },
+    ];
   }
+  $('kpis').innerHTML = tiles.map((t) => `<div class="kpi ${t.cls || ''}"><div class="kpi-label">${t.label}</div><div class="kpi-value">${t.value}</div><div class="kpi-sub">${t.sub}</div></div>`).join('');
+}
+
+// Itinerary
+function flightPill(f) {
+  const t = f.statusText;
+  if (f.status === 'CANCELLED') return '<span class="pill bad">Cancelled</span>';
+  if (f.status === 'LANDED') return '<span class="pill plain">Landed</span>';
+  if (f.status === 'DEPARTED') return `<span class="pill info">${esc(t.replace('in the air', 'In the air'))}</span>`;
+  if (/late/.test(t)) return `<span class="pill warn">${esc(t.replace('running', 'Running'))}</span>`;
+  return '<span class="pill ok">On time</span>';
+}
+function renderItinerary(s, tz) {
+  $('itinerary').innerHTML = `<div class="legs">${s.legs.map((f) => `
+    <div class="leg">
+      <div><div class="leg-code">${esc(f.id)}</div><div class="leg-time">${esc(dayHm(f.est_dep, tz))}</div></div>
+      <div class="leg-route"><span class="ap">${esc(f.from)}</span><span class="line"></span><span class="ap">${esc(f.to)}</span>
+        <span class="leg-time">${esc(CITY[f.from] || f.from)} to ${esc(CITY[f.to] || f.to)}</span></div>
+      <div>${flightPill(f)}</div>
+    </div>`).join('')}</div>`;
+}
+
+// Payment plan (transfers) or card payments
+const STATUS_PILL = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill warn">Scheduled</span>', CANCELLED: '<span class="pill plain">Cancelled</span>' };
+const DECLINE = {
+  MERCHANT_CATEGORY_NOT_ALLOWED: 'Merchant type not allowed',
+  LIMIT_EXCEEDED: 'Over the limit',
+  OUT_OF_ALLOWED_TIME_RANGE: 'Outside active time',
+  CURRENCY_NOT_ALLOWED: 'Wrong currency',
+  CARD_INACTIVE: 'Card switched off',
+  CARD_CLOSED: 'Card closed',
+};
+const MCC_NAMES = { 5812: 'Restaurant', 5814: 'Fast food', 4121: 'Taxi', 4111: 'Local transport', 7011: 'Hotel', 5813: 'Bar', 5732: 'Electronics' };
+
+function paymentRows(pay, tz, full) {
+  return pay.slice().reverse().map((l) => {
+    const key = `${l.id}:${l.status}`;
+    const isNew = !seenPayments.has(key);
+    seenPayments.add(key);
+    const when = l.status === 'SCHEDULED' ? `due ${dayHm(l.payAt, tz)}` : l.status === 'CANCELLED' ? 'not needed' : dayHm(l.payAt, tz);
+    const fx = l.received && l.received.currency !== l.currency ? money(l.received.amount, l.received.currency) : '';
+    return `<tr class="${l.status === 'CANCELLED' ? 'cancelled' : ''} ${isNew ? 'fresh' : ''}">
+      <td><span class="who"><i class="${l.role === 'hotel' ? 'hotel' : ''}">${l.role === 'hotel' ? 'H' : esc(first()[0])}</i><span>${esc(l.what)}<span class="sub">${l.role === 'hotel' ? esc(l.payeeName) : `${esc(S.traveller.name)} · bank account`}</span></span></span></td>
+      <td>${STATUS_PILL[l.status] || esc(l.status)}<span class="sub">${esc(when)}</span></td>
+      ${full ? `<td class="r">${l.fee != null ? money(l.fee, l.currency) : '—'}</td><td><span class="mono">${esc(String(l.id).slice(0, 8))}</span></td>` : ''}
+      <td class="r amt"><b>${money(l.amount, l.currency)}</b>${fx ? `<span class="sub">${esc(fx)} received</span>` : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderMoney(s, tz, transfer) {
+  $('buy-form').hidden = transfer || !s.card;
+  $('money-title').textContent = transfer ? 'Payment plan' : 'Card payments';
+  $('money-meta').textContent = s.adapters.funding;
+  const summary = summaryHtml(s);
+  if (transfer) {
+    const pay = s.payments || [];
+    $('money-table').innerHTML = (pay.length
+      ? `<div class="table-wrap"><table><thead><tr><th>Payment</th><th>Status</th><th class="r">Amount</th></tr></thead><tbody>${paymentRows(pay, tz, false)}</tbody></table></div>`
+      : `<div class="empty"><b>Nothing paid yet</b>Detour is watching ${esc(first())}'s flights. Nothing to do while the trip is on track.</div>`) + summary;
+    return;
+  }
+  const tx = s.transactions;
+  $('money-table').innerHTML = (tx.length
+    ? `<div class="table-wrap"><table><thead><tr><th>Merchant</th><th>Status</th><th class="r">Amount</th></tr></thead><tbody>${tx.slice().reverse().map((t) => `
+      <tr class="${t.status === 'APPROVED' ? '' : 'cancelled'}"><td>${esc(t.merchant)}<span class="sub">${esc(MCC_NAMES[t.mcc] || `MCC ${t.mcc}`)} · ${esc(dayHm(t.at, tz))}${t.incrementOf ? ' · top-up' : ''}</span></td>
+      <td>${t.status === 'APPROVED' ? '<span class="pill ok">Approved</span>' : `<span class="pill bad">Declined</span><span class="sub">${esc(DECLINE[t.reason] || t.reason)}</span>`}</td>
+      <td class="r amt"><b>${money(t.amount, t.currency)}</b></td></tr>`).join('')}</tbody></table></div>`
+    : `<div class="empty"><b>No card payments yet</b>${s.card ? 'The card is ready to use.' : 'A card appears the moment the trip is disrupted.'}</div>`) + summary;
+}
+
+function summaryHtml(s) {
   const sm = s.summary;
-  $('summary').innerHTML = sm ? `<div class="summary"><h4>Trip closed · summary</h4>
-    Sent <b>${money(sm.toTraveller, sm.currency)}</b> to ${esc(s.traveller.name.split(' ')[0])} and <b>${money(sm.toHotel, sm.currency)}</b> straight to the hotel in ${sm.payments} payments.<br>
-    <b>${money(sm.cancelled, sm.currency)}</b> was scheduled but never paid out. ${sm.approvals} manager approval${sm.approvals === 1 ? '' : 's'} · no receipts, no expense claim.</div>` : '';
-}
-
-function renderPayments(s, tz) {
-  const pay = s.payments || [];
-  if (!pay.length) {
-    $('spend').innerHTML = '<li class="none">No payments yet.</li>';
-    return;
+  if (!sm) return '';
+  if (sm.mode === 'transfer') {
+    return `<div class="summary"><b>Trip closed.</b> Sent ${money(sm.toTraveller, sm.currency)} to ${esc(first())} and ${money(sm.toHotel, sm.currency)} straight to the hotel. ${money(sm.cancelled, sm.currency)} was scheduled but never paid out. No receipts, no expense claim.</div>`;
   }
-  const first = s.traveller.name.split(' ')[0];
-  $('spend').innerHTML = pay.slice().reverse().map((l) => {
-    const cls = l.status === 'SENT' ? 'ok' : l.status === 'SCHEDULED' ? 'sched' : 'cancel';
-    const fx = l.received && l.received.currency !== l.currency ? ` → ${money(l.received.amount, l.received.currency)}` : '';
-    const when = l.status === 'SENT' ? `Paid ${dayHm(l.payAt, tz)}` : l.status === 'SCHEDULED' ? `Scheduled for ${dayHm(l.payAt, tz)} · cancellable` : 'Cancelled before payment';
-    return `<li class="${cls}">
-      <span><span class="to">${l.role === 'hotel' ? 'Hotel' : first}</span>${esc(l.what)}</span><span class="amt">${money(l.amount, l.currency)}</span>
-      <span class="why">${when}${esc(fx)}${l.fee ? ` · fee ${money(l.fee, l.currency)}` : ''}</span></li>`;
-  }).join('');
+  return `<div class="summary"><b>Trip closed.</b> Spent ${money(sm.spent, sm.currency)} of ${money(sm.limit, sm.currency)}. ${sm.declined} payment${sm.declined === 1 ? '' : 's'} blocked. No receipts needed.</div>`;
 }
 
-function renderSpend(s, tz) {
-  if (!s.transactions.length) {
-    $('spend').innerHTML = '<li class="none">No payments yet.</li>';
-    return;
-  }
-  $('spend').innerHTML = s.transactions.slice().reverse().map((t) => {
-    const ok = t.status === 'APPROVED';
-    const what = MCC_NAMES[t.mcc] || `MCC ${t.mcc}`;
-    return `<li class="${ok ? 'ok' : 'bad'}">
-      <span>${esc(t.merchant)}</span><span class="amt">${money(t.amount, t.currency)}</span>
-      <span class="why">${hm(t.at, tz)} · ${esc(what)}${t.incrementOf ? ' · top-up' : ''} · ${ok ? 'Approved' : esc(DECLINE[t.reason] || t.reason)}</span></li>`;
-  }).join('');
+// Approvals
+function approvalTitle(a) {
+  if (a.kind === 'nights') return `Night ${a.to.nights} in ${a.to.city}`;
+  if (a.kind === 'issue') return 'Open funding';
+  return `Extra for ${first()}`;
 }
-
-function renderApprovals(s, tz) {
+function renderApprovals(el, s, tz, compactHistory) {
   const list = s.approvals.slice().reverse();
   if (!list.length) {
-    $('approvals').innerHTML = `<p class="no-approvals">Nothing needs ${esc(s.manager)}. Detour handles everything inside policy on its own and only asks when it must.</p>`;
+    el.innerHTML = `<div class="appr-empty">Nothing needs ${esc(s.manager)}. Detour handles everything inside policy on its own.</div>`;
     return;
   }
-  $('approvals').innerHTML = list.map((a) => {
+  el.innerHTML = list.map((a) => {
+    const statePill = { PENDING: 'warn', APPROVED: 'ok', DECLINED: 'bad', STALE: 'plain', WITHDRAWN: 'plain' }[a.status];
+    const label = { PENDING: 'Needs decision' }[a.status] || a.status.charAt(0) + a.status.slice(1).toLowerCase();
+    if (compactHistory && a.status !== 'PENDING') {
+      return `<div class="appr compact"><b>${esc(approvalTitle(a))}</b><span class="pill ${statePill}">${label}</span><span class="appr-when">${esc(dayHm(a.decidedAt || a.at, tz))}</span></div>`;
+    }
     const to = a.to;
-    const ev = a.evidence;
-    return `<div class="approval ${a.status === 'PENDING' ? 'pending' : ''}">
-      <div class="head"><b>${a.kind === 'nights' ? `Night ${to.nights} for ${esc(s.traveller.name.split(' ')[0])}` : a.kind === 'issue' ? 'New card' : 'Raise for ' + esc(s.traveller.name.split(' ')[0])}</b>
-        <span class="state ${a.status}">${a.status}</span></div>
-      <div class="why">${esc(a.why)}</div>
+    const pays = s.mode === 'transfer'
+      ? `${esc(first())}: meals and taxis${to.nights ? ` · hotel paid directly, ${to.nights} night${to.nights > 1 ? 's' : ''}` : ''}`
+      : `${esc(to.categories.join(', '))} (MCC ${esc(to.mccs.join(', '))})`;
+    return `<div class="appr ${a.status === 'PENDING' ? 'pending' : ''}">
+      <div class="appr-head"><b>${esc(approvalTitle(a))}</b><span class="pill ${statePill}">${label}</span></div>
+      <div class="appr-why">${esc(a.why)}.</div>
       <dl class="bound">
-        <dt>Amount</dt><dd>+${money(a.delta, to.currency)} → limit ${money(to.limit, to.currency)}</dd>
-        ${s.mode === 'transfer'
-          ? `<dt>Pays</dt><dd>${esc(s.traveller.name.split(' ')[0])}: meals &amp; taxis${to.nights ? ` · hotel paid directly (${to.nights} night${to.nights > 1 ? 's' : ''})` : ''}</dd><dt>Covers until</dt><dd>${dayHm(to.activeTo, tz)}</dd>`
-          : `<dt>Merchants</dt><dd>${esc(to.categories.join(', '))} (${esc(to.mccs.join(', '))})</dd><dt>Expires</dt><dd>${dayHm(to.activeTo, tz)}</dd>`}
+        <dt>Amount</dt><dd>+${money(a.delta, to.currency)} <span style="color:var(--muted);font-weight:400">→ ${money(to.limit, to.currency)} total</span></dd>
+        <dt>Pays</dt><dd>${pays}</dd>
+        <dt>Until</dt><dd>${esc(dayHm(to.activeTo, tz))}</dd>
       </dl>
-      <div class="ev"><b>Evidence</b><ul>
-        ${ev.flights.map((f) => `<li>${esc(f.id)} ${esc(f.from)}→${esc(f.to)}: ${esc(f.status)}, departs ${dayHm(f.est_dep, tz)}</li>`).join('')}
-        ${ev.emails.map((e) => `<li>Airline email: “${esc(e.subject)}” ${e.agrees ? '(feed agrees)' : '(feed does not confirm)'}</li>`).join('')}
-        ${ev.traveller.map((t) => `<li>${esc(s.traveller.name.split(' ')[0])}: “${esc(t)}”</li>`).join('')}
+      <div class="evidence">Evidence<ul>
+        ${a.evidence.flights.map((f) => `<li>${esc(f.id)} ${esc(f.from)}→${esc(f.to)}: ${esc(f.status)}, departs ${esc(dayHm(f.est_dep, tz))}</li>`).join('')}
+        ${a.evidence.emails.map((e) => `<li>Airline: “${esc(e.subject)}” (${e.agrees ? 'feed agrees' : 'feed does not confirm'})</li>`).join('')}
+        ${a.evidence.traveller.map((t) => `<li>${esc(first())}: “${esc(t)}”</li>`).join('')}
       </ul></div>
-      ${a.status === 'PENDING' ? `<div class="act"><button class="yes" data-approve="${a.id}">Approve</button><button data-decline="${a.id}">Decline</button></div>` : ''}
+      ${a.status === 'PENDING' ? `<div class="appr-actions"><button class="btn" data-decline="${a.id}">Decline</button><button class="btn primary" data-approve="${a.id}">Approve</button></div>` : ''}
     </div>`;
   }).join('');
 }
 
-function renderLog(s, tz) {
-  const log = $('log');
-  log.innerHTML = s.log.map((l) => `<li><time>${hm(l.at, tz)}</time><span class="src ${l.source}">${esc(l.source)}</span><span>${esc(l.text)}</span></li>`).join('');
-  if (s.log.length !== lastLogCount) log.scrollTop = log.scrollHeight;
-  lastLogCount = s.log.length;
+// Chat
+function renderChat(s, tz) {
+  $('phone-title').textContent = s.traveller.name;
+  $('phone-avatar').textContent = s.traveller.name.split(' ').map((p) => p[0]).join('');
+  const chat = $('chat');
+  const writing = s.activity && /^(Messaging|Replying|Reading .*message)/.test(s.activity);
+  if (!s.messages.length && !writing) {
+    chat.innerHTML = `<div class="chat-empty">No messages yet. Detour writes to ${esc(first())} the moment the trip is disrupted.</div>`;
+  } else {
+    chat.innerHTML = s.messages.map((m) => `<div class="msg ${m.from}">${esc(m.text)}<time>${hm(m.at, tz)}</time></div>`).join('')
+      + (writing ? '<div class="typing" aria-label="Detour is writing"><span></span><span></span><span></span></div>' : '');
+  }
+  const count = s.messages.length + (writing ? 1 : 0);
+  if (count !== lastChat) chat.scrollTop = chat.scrollHeight;
+  lastChat = count;
+  const lock = s.busy || s.playing;
+  $('chat-text').disabled = lock;
+  $('chat-form').querySelector('button').disabled = lock;
+  $('chat-text').placeholder = lock ? 'Detour is working…' : `Write as ${first()}, e.g. “The hotel wants a deposit”`;
 }
 
-// ---------------------------------------------------------------- wiring
+// Log
+const TAG = { story: 'Story', feed: 'Flight feed', rules: 'Rules', money: 'Payment', card: 'Card', agent: 'Agent', manager: 'Manager', merchant: 'Merchant', error: 'Error' };
+function renderLog(el, rows, tz) {
+  el.innerHTML = rows.length
+    ? rows.map((l) => `<li><time>${hm(l.at, tz)}</time><span class="tag ${l.source}">${TAG[l.source] || esc(l.source)}</span><span>${esc(l.text)}</span></li>`).join('')
+    : '<li style="display:block;color:var(--muted)">Nothing yet.</li>';
+}
+const FILTERS = [['all', 'All'], ['rules', 'Decisions'], ['money', 'Payments'], ['agent', 'Agent'], ['feed', 'Flight feed'], ['manager', 'Manager']];
+function renderLogFull(s, tz) {
+  $('log-filters').innerHTML = FILTERS.map(([k, label]) => `<button class="chip-btn ${logFilter === k ? 'on' : ''}" data-filter="${k}">${label}</button>`).join('');
+  const rows = s.log.filter((l) => logFilter === 'all' || l.source === logFilter || (logFilter === 'money' && l.source === 'card'));
+  renderLog($('log-full'), rows, tz);
+}
+
+// Payments page
+function renderPaymentsFull(s, tz, transfer) {
+  $('payments-intro').textContent = transfer
+    ? `Every payment Detour has made, scheduled or cancelled through ${s.adapters.funding}. Later days are scheduled, not sent, so they can be cancelled if the trip ends sooner.`
+    : `Every charge on the Detour card through ${s.adapters.funding}.`;
+  const pay = s.payments || [];
+  $('payments-full').innerHTML = transfer && pay.length
+    ? `<div class="table-wrap"><table><thead><tr><th>Payment</th><th>Status</th><th class="r">Fee</th><th>Transfer ID</th><th class="r">Amount</th></tr></thead><tbody>${paymentRows(pay, tz, true)}</tbody></table></div>${summaryHtml(s)}`
+    : '<div class="empty"><b>No payments yet</b>They appear here as soon as a trip is disrupted.</div>';
+}
+
+// Policy page
+function renderPolicy(s) {
+  const p = s.policy;
+  const r = p.rules;
+  const rows = [
+    ['Disruption', `A delay of ${r.delay_threshold_hours}h or more, a cancellation, or a connection under ${r.min_connection_minutes} min`],
+    ['Nights', `Counted at ${r.overnight_cutoff_local} local time before the next confirmed flight`],
+    ['Automatic', `Up to ${r.auto_nights} night${r.auto_nights === 1 ? '' : 's'}; extras up to ${r.max_auto_raise_pct}% of the current amount`],
+    ['Needs approval', `Night ${r.auto_nights + 1} onwards, or any extra above ${r.max_auto_raise_pct}%`],
+    ['Ends', `${r.rebook_buffer_hours}h after the next confirmed departure (${r.provisional_hours}h at a time while none is confirmed)`],
+    ['Hotel', `City rate × ${r.lodging_factor}, paid directly to the hotel`],
+  ];
+  $('policy').innerHTML = `
+    <div class="card"><div class="card-head"><h2>Rules</h2><span class="meta">${esc(s.manager)} approves exceptions</span></div>
+      <table><tbody>${rows.map(([k, v]) => `<tr><td style="width:150px;color:var(--muted)">${k}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="card"><div class="card-head"><h2>City rates</h2><span class="meta">Demo values</span></div>
+      <div class="table-wrap"><table><thead><tr><th>City</th><th class="r">Meals / day</th><th class="r">Taxis</th><th class="r">Hotel / night</th></tr></thead><tbody>
+      ${Object.entries(p.cities).map(([code, c]) => `<tr><td>${esc(c.city)}<span class="sub">${esc(code)}${c.hotel ? ` · ${esc(c.hotel)}` : ''}</span></td><td class="r">${money(c.meals_per_day, c.currency)}</td><td class="r">${money(c.transport, c.currency)}</td><td class="r">${money(c.lodging_per_night, c.currency)}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
+}
+
+// ---------------------------------------------------------------- views and input
+function showView(name) {
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === name));
+  document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
+  try { localStorage.setItem('detour.view', name); } catch {}
+  window.scrollTo({ top: 0 });
+}
+$('nav').onclick = (e) => { const b = e.target.closest('button[data-view]'); if (b) showView(b.dataset.view); };
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-goto]');
+  if (go) showView(go.dataset.goto);
+  const f = e.target.closest('[data-filter]');
+  if (f) { logFilter = f.dataset.filter; if (S) renderLogFull(S, S.tz); }
+  const yes = e.target.closest('[data-approve]');
+  const no = e.target.closest('[data-decline]');
+  if (yes || no) {
+    (yes || no).closest('.appr-actions').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    post('/api/decide', { id: yes ? yes.dataset.approve : no.dataset.decline, decision: yes ? 'approve' : 'decline' });
+  }
+});
+
 $('btn-step').onclick = () => post('/api/step');
 $('btn-run').onclick = () => post('/api/run');
-$('btn-reset').onclick = () => post('/api/reset');
+$('btn-reset').onclick = () => { seenPayments.clear(); post('/api/reset'); };
 $('chat-form').onsubmit = (e) => {
   e.preventDefault();
   const text = $('chat-text').value.trim();
-  if (!text) return;
+  if (!text || S?.busy || S?.playing) return;
   $('chat-text').value = '';
   post('/api/chat', { text });
 };
@@ -233,10 +373,24 @@ $('buy-form').onsubmit = (e) => {
   const mcc = $('buy-mcc').value;
   post('/api/purchase', { mcc, amount: $('buy-amount').value, currency: $('buy-cur').value, merchant: `${MCC_NAMES[mcc]} (test)` });
 };
-$('approvals').onclick = (e) => {
-  const id = e.target.dataset.approve || e.target.dataset.decline;
-  if (id) post('/api/decide', { id, decision: e.target.dataset.approve ? 'approve' : 'decline' });
-};
+// Shortcuts for recording: N = next event, P = play.
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'n' || e.key === 'N') { if (!$('btn-step').disabled) $('btn-step').click(); }
+  if (e.key === 'p' || e.key === 'P') { if (!$('btn-run').disabled) $('btn-run').click(); }
+});
 
-const events = new EventSource('/events');
-events.onmessage = (e) => render(JSON.parse(e.data));
+{
+  let saved = new URLSearchParams(location.search).get('view');
+  try { saved = saved || localStorage.getItem('detour.view'); } catch {}
+  if (saved && document.querySelector(`.view[data-view="${saved}"]`)) showView(saved);
+}
+
+// ?snapshot loads the state once (for screenshots); otherwise stay live over Server-Sent Events.
+if (new URLSearchParams(location.search).has('snapshot')) {
+  fetch('/api/state').then((r) => r.json()).then(render);
+} else {
+  const events = new EventSource('/events');
+  events.onmessage = (e) => render(JSON.parse(e.data));
+  events.onerror = () => toast('Reconnecting to the Detour server…');
+}

@@ -71,7 +71,7 @@ test('the second night needs the travel manager; the first does not', () => {
   const one = rules.planControls({ nights: 1, city: FRA, policy, activeFrom: 0, activeTo: 1 });
   const two = rules.planControls({ nights: 2, city: FRA, policy, activeFrom: 0, activeTo: 1 });
   assert.equal(rules.needsApproval(null, one, 0, policy), null);
-  assert.match(rules.needsApproval(one, two, 0, policy), /Night 2/);
+  assert.match(rules.needsApproval(one, two, 0, policy), /night 2 needs approval/);
   assert.equal(rules.needsApproval(one, two, 2, policy), null);
 });
 

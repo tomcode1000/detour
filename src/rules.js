@@ -88,7 +88,8 @@ export function sameControls(a, b) {
 export function needsApproval(current, planned, approvedNights, policy) {
   const allowedNights = Math.max(approvedNights, policy.rules.auto_nights);
   if (planned.nights > allowedNights) {
-    return `Night ${planned.nights} is over policy (${policy.rules.auto_nights} automatic)`;
+    const n = policy.rules.auto_nights;
+    return `Policy covers ${n} night${n === 1 ? '' : 's'} automatically; night ${planned.nights} needs approval`;
   }
   return null;
 }

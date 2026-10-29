@@ -43,6 +43,15 @@ export class Engine {
     this.summary = null;
     this.waiting = false;
     this.busy = false;
+    this.playing = false;
+    this.activity = null;
+    this.changed();
+  }
+
+  // What Detour is doing right now, pushed to the page so slow steps (model calls,
+  // Airwallex calls) never look frozen.
+  doing(text) {
+    this.activity = text;
     this.changed();
   }
 
@@ -70,6 +79,7 @@ export class Engine {
   get mode() { return this.funding.kind; } // 'card' | 'transfer'
 
   async notify(notice) {
+    this.doing(`Messaging ${this.scenario.traveller.first_name}`);
     const text = await this.agent.notify({ notice: { spent: this.spent, mode: this.mode, ...notice }, card: this.card, policy: this.policy });
     this.noteModelFallback();
     await this.say(text);
@@ -95,6 +105,7 @@ export class Engine {
     if (this.busy || this.finished) return false;
     if (this.waiting && this.approvals.some((a) => a.status === 'PENDING')) return false;
     this.busy = true;
+    this.doing('Checking the flight feed');
     try {
       this.waiting = false;
       const ev = this.scenario.events[this.cursor++];
@@ -106,6 +117,7 @@ export class Engine {
       this.record('error', e.message);
     } finally {
       this.busy = false;
+      this.activity = null;
       this.changed();
     }
     return true;
@@ -113,10 +125,17 @@ export class Engine {
 
   // Plays forward until the story ends or needs a human.
   async runToPause() {
-    while (!this.finished) {
-      const moved = await this.step();
-      if (!moved) break;
-      if (this.waiting && this.approvals.some((a) => a.status === 'PENDING')) break;
+    if (this.playing) return;
+    this.playing = true;
+    try {
+      while (!this.finished) {
+        const moved = await this.step();
+        if (!moved) break;
+        if (this.waiting && this.approvals.some((a) => a.status === 'PENDING')) break;
+      }
+    } finally {
+      this.playing = false;
+      this.changed();
     }
   }
 
@@ -141,6 +160,7 @@ export class Engine {
         }
         break;
       case 'email': {
+        this.doing('Reading the airline email');
         const parsed = await this.agent.readEmail(ev);
         this.noteModelFallback();
         parsed.flights = [...new Set((parsed.flights || []).map((f) => String(f).replace(/\s+/g, '').toUpperCase()))];
@@ -263,6 +283,7 @@ export class Engine {
 
   async issue(controls, reason) {
     const requestId = `detour-${this.runKey}-${this.scenario.traveller.id}-d${this.disruption.seq}`;
+    this.doing(this.mode === 'transfer' ? 'Sending payments through Airwallex' : 'Issuing the card on Airwallex');
     const card = await this.funding.issue({ traveller: this.scenario.traveller, controls, requestId });
     const { changes, ...rest } = card;
     this.card = { ...rest, controls, approvedNights: 0, grantedNights: 0, declinedNights: 0, extras: 0, extraCategories: [] };
@@ -274,6 +295,7 @@ export class Engine {
 
   async updateCard(controls, change, prefix) {
     const before = this.card.controls;
+    this.doing(this.mode === 'transfer' ? 'Updating payments on Airwallex' : 'Updating the card on Airwallex');
     const card = await this.funding.update(this.card.id, controls);
     this.card.controls = controls;
     this.card.status = card.status || this.card.status;
@@ -289,6 +311,7 @@ export class Engine {
   }
 
   async setCardStatus(status) {
+    this.doing(this.mode === 'transfer' ? 'Cancelling unneeded payments on Airwallex' : 'Switching the card off');
     const res = await this.funding.setStatus(this.card.id, status);
     this.card.status = status;
     const payments = this.paymentsText(res?.changes);
@@ -354,8 +377,9 @@ export class Engine {
 
   async decide(id, decision) {
     const a = this.approvals.find((x) => x.id === id);
-    if (!a || a.status !== 'PENDING') return false;
+    if (!a || a.status !== 'PENDING' || this.busy) return false;
     this.busy = true;
+    this.doing(`Applying ${this.policy.travel_manager}'s decision`);
     try {
       // The approval is bound to the exact card it was asked about. If the card has moved on, it is stale.
       if (a.from && !rules.sameControls(this.card?.controls, a.from)) {
@@ -387,6 +411,7 @@ export class Engine {
       await this.reconcile();
     } finally {
       this.busy = false;
+      this.activity = null;
       this.changed();
     }
     return true;
@@ -395,11 +420,13 @@ export class Engine {
   // ---------------------------------------------------------------- traveller and merchants
   async travellerSays(text) {
     this.messages.push({ at: this.clock, from: 'traveller', text });
+    this.doing(`Reading ${this.scenario.traveller.first_name}'s message`);
     const proposal = await this.agent.understand(text, { card: this.card, policy: this.policy, spent: this.spent });
     this.noteModelFallback();
     this.record('agent', `Understood Ada as: ${JSON.stringify(proposal)}`);
     const outcome = await this.handleProposal(proposal);
     this.record('rules', `Decision: ${outcome.result}${outcome.why ? ` - ${outcome.why}` : ''}`);
+    this.doing(`Replying to ${this.scenario.traveller.first_name}`);
     const reply = await this.agent.reply({ text, outcome: { ...outcome, spent: this.spent }, card: this.card, policy: this.policy });
     this.noteModelFallback();
     await this.say(reply);
@@ -472,7 +499,7 @@ export class Engine {
   async chat(text) {
     if (this.busy) return;
     this.busy = true;
-    try { await this.travellerSays(text); } finally { this.busy = false; this.changed(); }
+    try { await this.travellerSays(text); } finally { this.busy = false; this.activity = null; this.changed(); }
   }
 
   async closeOut() {
@@ -551,6 +578,13 @@ export class Engine {
       log: this.log,
       summary: this.summary,
       busy: this.busy,
+      playing: this.playing,
+      activity: this.activity,
+      policy: {
+        rules: this.policy.rules,
+        categories: this.policy.categories,
+        cities: Object.fromEntries(Object.entries(this.policy.cities).map(([code, c]) => [code, { city: c.city, currency: c.currency, meals_per_day: c.meals_per_day, transport: c.transport, lodging_per_night: c.lodging_per_night, hotel: c.hotel?.name || null }])),
+      },
     };
   }
 }
