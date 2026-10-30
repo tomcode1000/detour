@@ -37,7 +37,8 @@ export class Engine {
     this.transactions = [];
     this.approvals = [];
     this.messages = [];
-    this.emails = [];
+    this.emails = [];      // airline messages Detour has read (only ones the traveller shared)
+    this.inbox = [];       // airline messages that reached the traveller's phone
     this.log = [];
     this.scene = null;
     this.summary = null;
@@ -159,14 +160,14 @@ export class Engine {
           this.record('feed', `Rebooked: ${old} replaced by ${f.id} (${f.from}-${f.to})`);
         }
         break;
-      case 'email': {
-        this.doing('Reading the airline email');
-        const parsed = await this.agent.readEmail(ev);
-        this.noteModelFallback();
-        parsed.flights = [...new Set((parsed.flights || []).map((f) => String(f).replace(/\s+/g, '').toUpperCase()))];
-        const agrees = this.feedAgrees(parsed);
-        this.emails.push({ at: this.clock, from: ev.from, subject: ev.subject, body: ev.body, parsed, agrees });
-        this.record('agent', `Airline email read as "${parsed.kind}" (${parsed.flights.join(', ') || 'no flight'}). ${agrees ? 'The flight feed agrees.' : 'The flight feed does not confirm this - an email alone cannot open or raise a card.'}`);
+      case 'email':
+        // The airline writes to the traveller, not to Detour. Detour only reads what they share.
+        this.inbox.push({ id: `msg_${this.inbox.length + 1}`, at: this.clock, from: ev.from, subject: ev.subject, body: ev.body, shared: false });
+        this.record('inbox', `Airline message reached ${this.scenario.traveller.first_name}'s phone: "${ev.subject}"`);
+        break;
+      case 'share': {
+        const item = this.inbox.find((m) => m.subject === ev.subject && !m.shared);
+        if (item) await this.readShared({ text: `${item.subject}\n\n${item.body}`, how: 'forwarded', inboxId: item.id });
         break;
       }
       case 'traveller':
@@ -196,7 +197,7 @@ export class Engine {
   // An email counts only if the flight feed shows the same thing.
   feedAgrees(parsed) {
     const known = parsed.flights.map((id) => this.flights[id]).filter(Boolean);
-    if (!known.length) return false;
+    if (!known.length || parsed.kind === 'other') return false;
     if (parsed.kind === 'rebooked') return parsed.flights.some((id) => this.legs.includes(id));
     if (parsed.kind === 'cancelled') return known.some((f) => f.status === 'CANCELLED');
     return rules.detectDisruption(this.legs, this.flights, this.policy) !== null;
@@ -496,6 +497,36 @@ export class Engine {
     }
   }
 
+  // The traveller shares an airline message (forwarded, pasted, or text read from a screenshot
+  // on their phone). It is untrusted data: the agent only reports what it says, the flight feed
+  // must agree, and nothing in it can move money or change the rules.
+  async readShared({ text, how = 'pasted', inboxId = null }) {
+    const first = this.scenario.traveller.first_name;
+    const body = String(text).slice(0, 4000);
+    if (inboxId) this.inbox.find((m) => m.id === inboxId).shared = true;
+    const firstLine = body.split('\n').find((l) => l.trim()) || '';
+    this.messages.push({ at: this.clock, from: 'traveller', kind: 'share', how, text: firstLine.slice(0, 140) });
+    this.doing('Reading the airline message');
+    const parsed = await this.agent.readEmail({ subject: '', body });
+    this.noteModelFallback();
+    parsed.flights = [...new Set((parsed.flights || []).map((f) => String(f).replace(/\s+/g, '').toUpperCase()))];
+    const agrees = this.feedAgrees(parsed);
+    const suspicious = Boolean(parsed.asks_for_money_or_details);
+    if (inboxId) this.inbox.find((m) => m.id === inboxId).verdict = suspicious ? 'suspicious' : agrees ? 'confirmed' : 'unconfirmed';
+    this.emails.push({ at: this.clock, subject: firstLine.slice(0, 120), how, parsed, agrees, suspicious });
+    this.record('agent', `${first} ${how === 'screenshot' ? 'shared a screenshot of' : how === 'forwarded' ? 'forwarded' : 'pasted'} an airline message. Read as "${parsed.kind}" (${parsed.flights.join(', ') || 'no flight'}). `
+      + (suspicious ? 'It asks for money or personal details: treated as suspicious, nothing changed.'
+        : agrees ? 'The flight feed agrees.' : 'The flight feed does not confirm this, so it moves no money.'));
+    await this.notify({ type: 'airline_read', kind: parsed.kind, flights: parsed.flights, agrees, suspicious });
+    await this.reconcile();
+  }
+
+  async shareAirlineMessage(args) {
+    if (this.busy) return;
+    this.busy = true;
+    try { await this.readShared(args); } finally { this.busy = false; this.activity = null; this.changed(); }
+  }
+
   async chat(text) {
     if (this.busy) return;
     this.busy = true;
@@ -576,6 +607,7 @@ export class Engine {
       approvals: this.approvals,
       messages: this.messages,
       emails: this.emails,
+      inbox: this.inbox,
       log: this.log,
       summary: this.summary,
       busy: this.busy,

@@ -51,6 +51,11 @@ const actions = {
   'POST /api/chat': (b) => (b.text ? engine.chat(String(b.text).slice(0, 500)) : null),
   'POST /api/decide': (b) => engine.decide(b.id, b.decision === 'approve' ? 'approve' : 'decline'),
   'POST /api/purchase': (b) => engine.tryPurchase(b),
+  'POST /api/airline-message': (b) => (b.text || b.inboxId ? engine.shareAirlineMessage({
+    text: b.inboxId ? (() => { const m = engine.inbox.find((x) => x.id === b.inboxId); return m ? `${m.subject}\n\n${m.body}` : ''; })() : String(b.text),
+    how: ['pasted', 'screenshot', 'forwarded', 'shared'].includes(b.how) ? b.how : 'pasted',
+    inboxId: b.inboxId || null,
+  }) : null),
 };
 
 const server = http.createServer(async (req, res) => {

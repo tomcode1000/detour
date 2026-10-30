@@ -1,6 +1,6 @@
 // Detour service worker: keeps the app shell available so the installed app opens instantly.
 // Live data (/api, /events) always goes to the network.
-const CACHE = 'detour-shell-v1';
+const CACHE = 'detour-shell-v2';
 const SHELL = [
   '/app', '/traveller', '/manager',
   '/ui.css', '/mobile.css', '/mobile.js', '/traveller.js', '/manager.js', '/demo-dock.js',
@@ -15,9 +15,25 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
+// Android "Share -> Detour": keep what was shared, then open the traveller app's share sheet.
+// Nothing is read by Detour until the traveller presses Send.
+async function receiveShare(request) {
+  const form = await request.formData();
+  const text = [form.get('title'), form.get('text'), form.get('url')].filter(Boolean).join('\n\n');
+  const image = form.get('image');
+  const cache = await caches.open('detour-share');
+  await cache.put('/shared/text', new Response(text));
+  if (image && image.size) await cache.put('/shared/image', new Response(image));
+  return Response.redirect('/traveller?shared', 303);
+}
+
 // Network first (so a new deploy shows straight away), the cached shell when offline.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  if (e.request.method === 'POST' && url.pathname === '/share-target') {
+    e.respondWith(receiveShare(e.request));
+    return;
+  }
   if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api') || url.pathname === '/events') return;
   e.respondWith(
     fetch(e.request)

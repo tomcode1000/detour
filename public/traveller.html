@@ -30,6 +30,7 @@
       <section class="tv-screen active" data-screen="trip">
         <div class="tv-hero" id="tv-hero"></div>
         <div class="tv-card" id="tv-flight"></div>
+        <div class="tv-card" id="tv-inbox"></div>
         <div class="tv-card" id="tv-hotel" hidden></div>
         <div class="tv-card" id="tv-money"></div>
         <p class="tv-fine" id="tv-fine"></p>
@@ -43,6 +44,22 @@
         </form>
       </section>
     </main>
+
+    <!-- Share an airline message: paste, screenshot (read on the phone), or Android share -->
+    <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+    <section class="sheet" id="sheet" hidden aria-label="Share an airline message">
+      <div class="sheet-grab"></div>
+      <h2>Share an airline message</h2>
+      <p class="sheet-sub">Paste the airline's email or text, or add a screenshot. Detour checks it against your flight status before anything changes.</p>
+      <textarea id="sheet-text" rows="6" placeholder="Paste the message here"></textarea>
+      <div class="sheet-row">
+        <label class="btn" for="sheet-file"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 16-5-5-8 8"/></svg>Add screenshot</label>
+        <input type="file" id="sheet-file" accept="image/*" hidden>
+        <span class="sheet-status" id="sheet-status"></span>
+      </div>
+      <p class="sheet-note">Screenshots are read on your phone. Only the text is sent, never the image.</p>
+      <div class="sheet-actions"><button class="btn lg-touch" id="sheet-cancel" type="button">Cancel</button><button class="btn primary lg-touch" id="sheet-send" type="button">Send to Detour</button></div>
+    </section>
 
     <nav class="tv-tabs" id="tv-tabs">
       <button data-screen="trip" class="active"><svg viewBox="0 0 24 24"><path d="M3 12.5 21 6l-4.5 15-4-6.5z"/><path d="m12.5 14.5 4-4"/></svg>Trip</button>

@@ -44,6 +44,10 @@ Settings in `.env` (git-ignored):
 - `scenarios/ada-frankfurt.json` is the scripted demo: a missed connection in Frankfurt, a rebooking, a second night and the trip home. The flight feed is scripted; a real deployment would use a paid flight-status API.
 - `config/policy.json` holds the company policy and city rates. The rates are demo values.
 
+## Airline messages
+
+Airlines write to the traveller, not to Detour. Messages land in the traveller app, and Detour reads only what the traveller chooses to share: forwarded, pasted, a screenshot (read on the phone with OCR, so only the text is sent), or on Android via Share → Detour. A shared message is untrusted data: the agent can only report what it says (what happened, which flights, whether it asks for money or personal details), the flight status feed must agree, and the rules set every amount. The demo includes a scam "refund" message with an injected instruction; it changes nothing and Detour warns the traveller (see `test/sharing.test.js`).
+
 ## Status
 
 Transfers run live on the Airwallex sandbox (tested 28 Oct 2026: EUR to SGD conversion, hotel paid via SWIFT, scheduled payments cancelled). The account cannot issue cards yet ("Invalid issuance details"), and Airwallex support has been asked to fix it. `sandbox_check.mjs` is the pre-build check for cards.

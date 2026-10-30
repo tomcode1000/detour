@@ -29,7 +29,9 @@ export function createStandinAgent() {
       else if (/cancel/i.test(text)) kind = 'cancelled';
       else if (/miss|connection/i.test(text)) kind = 'missed_connection';
       else if (/delay/i.test(text)) kind = 'delayed';
-      return { kind, flights, summary: subject };
+      const asks = /\b(send|transfer|wire|pay)\b.{0,40}\b(eur|€|usd|\$|gbp|£|fee|money|amount)|\biban\b|bank details|card (number|details)|password|verify your account/i.test(text);
+      if (asks && kind !== 'rebooked') kind = 'other';
+      return { kind, flights, asks_for_money_or_details: asks, summary: subject };
     },
 
     async understand(text) {

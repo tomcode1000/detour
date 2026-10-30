@@ -13,6 +13,7 @@ function render(s) {
   renderFlight(s, tz);
   renderHotel(s);
   renderMoney(s, tz);
+  renderInbox(s, tz);
   renderChat(s, tz);
   $('tv-fine').textContent = 'Demo: scripted flight feed and fictional test data. Payments run in the Airwallex sandbox.';
   const fromDetour = s.messages.filter((m) => m.from === 'detour').length;
@@ -122,6 +123,10 @@ function renderChat(s, tz) {
       const day = fmt(m.at, tz, { weekday: 'long', day: 'numeric', month: 'long' });
       const sep = day !== lastDay ? `<div class="tv-day">${esc(day)}</div>` : '';
       lastDay = day;
+      if (m.kind === 'share') {
+        const how = { screenshot: 'Shared a screenshot', forwarded: 'Forwarded an airline email', shared: 'Shared an airline message' }[m.how] || 'Shared an airline message';
+        return `${sep}<div class="msg traveller share"><span class="att"><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.7a1.7 1.7 0 0 1-2.4-2.4L15 7.6"/></svg>${how}</span><q>${esc(m.text)}</q><time>${hm(m.at, tz)}</time></div>`;
+      }
       return `${sep}<div class="msg ${m.from}">${esc(m.text)}<time>${hm(m.at, tz)}</time></div>`;
     }).join('') + (writing ? '<div class="typing" aria-label="Detour is writing"><span></span><span></span><span></span></div>' : '');
   }
@@ -143,10 +148,90 @@ $('tv-form').onsubmit = async (e) => {
   await api('/api/chat', { text });
 };
 
-setupTabs(screen, (name) => {
+// ---------------------------------------------------------------- airline messages
+function renderInbox(s, tz) {
+  const items = (s.inbox || []).slice().reverse();
+  const lock = s.busy || s.playing;
+  $('tv-inbox').innerHTML = `<div class="tv-card-head"><h2>Airline messages</h2><span>${items.length ? 'only what you share is read' : ''}</span></div>`
+    + (items.length ? items.map((m) => `
+      <div class="tv-inbox-item"><div class="l"><b>${esc(m.subject)}</b><span>${esc(m.from.replace(/\s*<.*>/, ''))} · ${esc(dayHm(m.at, tz))}</span></div>
+        ${m.shared ? ({ suspicious: '<span class="pill bad">Suspicious</span>', confirmed: '<span class="pill ok">Confirmed</span>', unconfirmed: '<span class="pill plain">Not confirmed</span>' }[m.verdict] || '<span class="pill plain">Reading…</span>') : `<button class="btn" data-share-inbox="${esc(m.id)}" ${lock ? 'disabled' : ''}>Share</button>`}</div>`).join('')
+      : '<div class="tv-inbox-item"><div class="l"><span>Messages from your airline appear here. Share one with Detour if it is about a delay or cancellation.</span></div></div>')
+    + `<button class="tv-share-any" id="share-any" ${lock ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/></svg>Share a message or screenshot</button>`;
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-share-inbox]');
+  if (b && !b.disabled) { b.disabled = true; api('/api/airline-message', { inboxId: b.dataset.shareInbox, how: 'forwarded' }); }
+  if (e.target.closest('#share-any')) openSheet();
+});
+
+// The share sheet
+let sheetHow = 'pasted';
+function openSheet(text = '', how = 'pasted') {
+  sheetHow = how;
+  $('sheet-text').value = text;
+  $('sheet-status').textContent = '';
+  $('sheet').hidden = false;
+  $('sheet-backdrop').hidden = false;
+  setTimeout(() => $('sheet-text').focus(), 50);
+}
+function closeSheet() { $('sheet').hidden = true; $('sheet-backdrop').hidden = true; }
+$('sheet-cancel').onclick = closeSheet;
+$('sheet-backdrop').onclick = closeSheet;
+$('sheet-send').onclick = async () => {
+  const text = $('sheet-text').value.trim();
+  if (!text) { $('sheet-status').textContent = 'Paste a message or add a screenshot first.'; return; }
+  if (S?.busy || S?.playing) { $('sheet-status').textContent = 'Detour is busy, try again in a moment.'; return; }
+  closeSheet();
+  setupTabsShow('messages');
+  await api('/api/airline-message', { text, how: sheetHow });
+};
+
+// Screenshots are read on the phone (Tesseract OCR, loaded only when needed); only text is sent.
+let ocrLib = null;
+async function readImage(file) {
+  $('sheet-status').innerHTML = '<span class="spinner"></span>Reading the screenshot on your phone…';
+  try {
+    if (!ocrLib) {
+      await new Promise((ok, fail) => {
+        const sc = document.createElement('script');
+        sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+        sc.onload = ok; sc.onerror = fail;
+        document.head.appendChild(sc);
+      });
+      ocrLib = window.Tesseract;
+    }
+    const { data } = await ocrLib.recognize(file, 'eng');
+    const text = data.text.replace(/[ \t]+\n/g, '\n').trim();
+    if (!text) throw new Error('no text');
+    $('sheet-text').value = text;
+    sheetHow = 'screenshot';
+    $('sheet-status').textContent = 'Check the text, then send.';
+  } catch {
+    $('sheet-status').textContent = "Couldn't read that image. Try pasting the text instead.";
+  }
+}
+$('sheet-file').onchange = (e) => { const f = e.target.files?.[0]; if (f) readImage(f); e.target.value = ''; };
+
+// Android "Share → Detour": the service worker keeps what was shared and opens /traveller?shared.
+async function pickUpShared() {
+  if (!params.has('shared') || !('caches' in window)) return;
+  const cache = await caches.open('detour-share');
+  const textRes = await cache.match('/shared/text');
+  const imageRes = await cache.match('/shared/image');
+  await cache.delete('/shared/text');
+  await cache.delete('/shared/image');
+  history.replaceState(null, '', '/traveller');
+  openSheet(textRes ? await textRes.text() : '', 'shared');
+  if (imageRes) readImage(await imageRes.blob());
+}
+
+const setupTabsShow = setupTabs(screen, (name) => {
   screen = name;
   if (S) render(S);
   if (name === 'messages') $('tv-chat').scrollTop = $('tv-chat').scrollHeight;
 });
 DetourDock.mount();
 connect(render);
+pickUpShared();

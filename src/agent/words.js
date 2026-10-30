@@ -47,6 +47,19 @@ export function describePayments({ created = [], cancelled = [] }, tz) {
   return parts.join('; ');
 }
 
+// Reply to a shared airline message. Built only from the checked facts, never from the
+// message's own wording, so a malicious message cannot put words in Detour's mouth.
+const KIND_WORDS = { cancelled: 'is cancelled', delayed: 'is delayed', missed_connection: 'means a missed connection', rebooked: 'confirms a rebooking' };
+function describeAirlineRead(n) {
+  const flights = n.flights?.length ? n.flights.join(' and ') : 'your flight';
+  if (n.suspicious) {
+    return "I've read the message you shared. It asks for money or personal details, and it doesn't match your flight status, so I haven't changed anything. Please don't reply to it or send anything. Your company never asks you to pay through Detour.";
+  }
+  if (n.kind === 'other') return "Thanks, I've read it. It doesn't say anything about a delay or cancellation, so nothing changes. I'm still watching your flights.";
+  if (n.agrees) return `Thanks, I've read it: it says ${flights} ${KIND_WORDS[n.kind]}. That matches the flight status, so you're covered as shown in the app.`;
+  return `Thanks, I've read it: it says ${flights} ${KIND_WORDS[n.kind]}. The flight status doesn't show that yet, so nothing changes for now. I'll update you the moment it does.`;
+}
+
 function describeTransferNotice(notice, policy) {
   const did = notice.payments ? `Detour has ${notice.payments}.` : '';
   switch (notice.type) {
@@ -64,6 +77,7 @@ function describeTransferNotice(notice, policy) {
 }
 
 export function describeNotice(notice, card, policy) {
+  if (notice.type === 'airline_read') return describeAirlineRead(notice);
   if (notice.mode === 'transfer') return describeTransferNotice(notice, policy);
   const facts = card ? describeCard(card, policy, notice.spent || 0) : '';
   switch (notice.type) {

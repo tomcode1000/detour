@@ -188,7 +188,7 @@ function renderPayments(s, tz) {
 }
 
 // ---------------------------------------------------------------- log
-const TAG = { story: 'Story', feed: 'Flight feed', rules: 'Rules', money: 'Payment', card: 'Card', agent: 'Agent', manager: 'Manager', merchant: 'Merchant', error: 'Error' };
+const TAG = { story: 'Story', feed: 'Flight feed', inbox: 'Inbox', rules: 'Rules', money: 'Payment', card: 'Card', agent: 'Agent', manager: 'Manager', merchant: 'Merchant', error: 'Error' };
 const FILTERS = [['all', 'All'], ['rules', 'Decisions'], ['money', 'Payments'], ['agent', 'Agent'], ['feed', 'Flights']];
 function renderLog(s, tz) {
   $('mg-filters').innerHTML = FILTERS.map(([k, l]) => `<button class="chip-btn ${logFilter === k ? 'on' : ''}" data-filter="${k}">${l}</button>`).join('');
