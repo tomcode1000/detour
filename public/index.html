@@ -3,134 +3,197 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Detour · Money that follows a stranded traveller</title>
-  <meta name="description" content="When a business traveller's flight is cancelled or badly delayed, Detour pays for meals, taxis and a hotel before they have to ask, inside company policy, and stops when they fly.">
+  <title>Detour · Travel disruptions, covered</title>
+  <meta name="description" content="Detour automatically pays for your meals, taxis and hotel when your flight is disrupted, before you have to ask. No receipts. No expense claims.">
+  <meta name="theme-color" content="#060a0d">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
-  <link rel="stylesheet" href="ui.css">
-  <link rel="stylesheet" href="landing.css">
+  <link rel="preload" as="image" href="img/hero.jpg">
+  <link rel="stylesheet" href="home.css">
 </head>
-<body class="lp">
-  <header class="lp-nav">
-    <div class="lp-wrap lp-nav-in">
-      <a class="lp-brand" href="/">
-        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 21.5c3.2 0 4.2-2.2 5.4-5.2 1.3-3.2 2.6-5.8 6.6-5.8h2.5" /><path d="M19.5 7.5l3 3-3 3" /></svg>
-        Detour
-      </a>
-      <nav class="lp-links">
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="logo" viewBox="0 0 32 35"><path fill="currentColor" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="var(--logo-cut, #060a0d)" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></symbol>
+      <symbol id="i-meal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3v7.5M9 3v7.5M12 3v7.5M6 10.5c0 1.6 1.3 2.5 3 2.5s3-.9 3-2.5M9 13v8"/><path d="M18 21V3c-2.2 1.2-3 4-3 7.5V13h3" fill="currentColor"/></symbol>
+      <symbol id="i-car" viewBox="0 0 24 24" fill="currentColor"><path d="M5.6 6.6A2.5 2.5 0 0 1 8 5h8a2.5 2.5 0 0 1 2.4 1.6L20 11a2 2 0 0 1 1 1.7V17a1 1 0 0 1-1 1h-1v1.2a1 1 0 0 1-1 1h-1.6a1 1 0 0 1-1-1V18H8.6v1.2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V18H4a1 1 0 0 1-1-1v-4.3A2 2 0 0 1 4 11zM7.6 7.3 6.5 10.5h11l-1.1-3.2a.6.6 0 0 0-.6-.4H8.2a.6.6 0 0 0-.6.4zM7 15.3a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zm10 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z"/></symbol>
+      <symbol id="i-bed" viewBox="0 0 24 24" fill="currentColor"><path d="M2 5.5a1 1 0 0 1 2 0V14h16.5A1.5 1.5 0 0 1 22 15.5v4a1 1 0 0 1-2 0V18H4v1.5a1 1 0 0 1-2 0z"/><circle cx="7.3" cy="10.3" r="2.3"/><path d="M10.5 9.3A1.3 1.3 0 0 1 11.8 8h6.4a3.3 3.3 0 0 1 3.3 3.3V13h-11z"/></symbol>
+      <symbol id="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
+      <symbol id="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="nav">
+    <div class="nav-in">
+      <a class="brand" href="/" aria-label="Detour home"><svg class="brand-mark"><use href="#logo"/></svg>Detour</a>
+      <nav class="nav-links" aria-label="Main">
         <a href="#how">How it works</a>
-        <a href="#safeguards">Safeguards</a>
-        <a href="#airwallex">Built on Airwallex</a>
+        <a href="#security">Security</a>
+        <a href="#companies">For companies</a>
+        <a href="/download">Download</a>
       </nav>
-      <div class="lp-actions">
-        <a class="btn" href="/demo">Live demo</a>
-        <a class="btn primary" href="/download">Get the app</a>
-      </div>
+      <a class="pill-btn nav-cta" href="/download">Get the app</a>
     </div>
   </header>
 
-  <section class="lp-hero">
-    <div class="lp-wrap lp-hero-in">
-      <div class="lp-copy">
-        <div class="lp-eyebrow">Travel disruption cover for companies</div>
-        <h1>When a flight breaks, the money is already there.</h1>
-        <p class="lp-lead">Detour pays a stranded employee for meals, taxis and a hotel before they have to ask: at the city's rate, inside your policy, and only until they fly. No personal card, no receipts, no expense claim.</p>
-        <div class="lp-cta">
-          <a class="btn primary lg" href="/demo">Watch a disruption, live</a>
-          <a class="btn lg" href="/download">Get the app</a>
-        </div>
-        <p class="lp-note">Runs on the Airwallex sandbox. Flight feed is scripted for the demo.</p>
-      </div>
-
-      <div class="lp-visual" aria-hidden="true">
-        <div class="lp-stack">
-          <div class="lp-shot">
-            <div class="lp-shot-head"><span>Payment plan</span><span class="pill warn">Disrupted · Frankfurt</span></div>
-            <div class="lp-shot-row"><span class="who"><i>A</i><span>Day 1 meals<small>Ada Lim · bank account</small></span></span><span class="amt"><b>€60.00</b><span class="pill ok">Paid</span></span></div>
-            <div class="lp-shot-row"><span class="who"><i class="hotel">H</i><span>Night 1 hotel<small>Paid directly to the hotel</small></span></span><span class="amt"><b>€180.00</b><span class="pill ok">Paid</span></span></div>
-            <div class="lp-shot-row"><span class="who"><i>A</i><span>Day 2 meals<small>Arrives Fri 06:00</small></span></span><span class="amt"><b>€60.00</b><span class="pill warn">Scheduled</span></span></div>
-            <div class="lp-shot-row off"><span class="who"><i class="hotel">H</i><span>Night 2 hotel<small>Earlier flight found</small></span></span><span class="amt"><b>€180.00</b><span class="pill plain">Cancelled</span></span></div>
-          </div>
-          <div class="lp-approval">
-            <div class="lp-approval-head"><b>Night 2 in Frankfurt</b><span class="pill warn">Needs decision</span></div>
-            <p>Policy covers 1 night automatically.</p>
-            <div class="lp-approval-actions"><span class="btn">Decline</span><span class="btn primary">Approve</span></div>
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-photo">
+        <img src="img/hero.jpg" alt="A traveller waits in an airport lounge, phone in hand" width="840" height="646">
+        <div class="phone" aria-label="The Detour app: your flight is cancelled, meals and taxi approved, hotel booked">
+          <div class="phone-screen">
+            <div class="ph-status"><span>9:41</span><i class="ph-island"></i><span class="ph-sys"><svg viewBox="0 0 18 10"><rect x="0" y="6" width="3" height="4" rx=".6"/><rect x="5" y="4" width="3" height="6" rx=".6"/><rect x="10" y="2" width="3" height="8" rx=".6"/><rect x="15" y="0" width="3" height="10" rx=".6"/></svg><svg viewBox="0 0 14 10"><path d="M7 9.6 4.8 7.2a3.2 3.2 0 0 1 4.4 0zM2.6 5a6.3 6.3 0 0 1 8.8 0l-1.3 1.3a4.5 4.5 0 0 0-6.2 0zM.4 2.8a9.4 9.4 0 0 1 13.2 0l-1.3 1.3a7.6 7.6 0 0 0-10.6 0z"/></svg><svg viewBox="0 0 22 10"><rect x=".5" y=".5" width="18" height="9" rx="2.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="6" rx="1.4"/><rect x="19.8" y="3.3" width="1.6" height="3.4" rx=".8" opacity=".4"/></svg></span></div>
+            <div class="ph-head"><span class="ph-app"><svg><use href="#logo"/></svg></span><span>Detour</span><i class="ph-menu"></i></div>
+            <div class="ph-title">Your flight is cancelled</div>
+            <div class="ph-sub">We’re taking care of everything.</div>
+            <div class="ph-list">
+              <div class="ph-row"><span class="ph-ic meal"><svg><use href="#i-meal"/></svg></span><span class="ph-lbl">Meals<b class="tag">Approved</b></span><span class="ph-amt">$42</span><svg class="ph-chev"><use href="#chev"/></svg></div>
+              <div class="ph-row"><span class="ph-ic car"><svg><use href="#i-car"/></svg></span><span class="ph-lbl">Taxi<b class="tag">Approved</b></span><span class="ph-amt">$38</span><svg class="ph-chev"><use href="#chev"/></svg></div>
+              <div class="ph-row"><span class="ph-ic bed"><svg><use href="#i-bed"/></svg></span><span class="ph-lbl">Hotel<b class="tag">Booked</b></span><span class="ph-amt soft">Tonight</span><svg class="ph-chev"><use href="#chev"/></svg></div>
+            </div>
+            <div class="ph-covered"><svg viewBox="0 0 24 24"><path fill="#2f8a4c" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/><path d="m8.5 12 2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>You’re covered</b>Within your company policy</span></div>
+            <i class="ph-home"></i>
           </div>
         </div>
-        <div class="lp-phone">
-          <div class="lp-phone-top">Detour</div>
-          <div class="msg detour">Your first flight is running late and you'll miss your connection. Detour has sent you €120 (SGD 169.42 in your account) for meals and taxis. No receipts needed.</div>
-          <div class="msg traveller">The hotel wants a deposit</div>
-          <div class="msg detour">Your hotel is already paid directly by your company. Just give your name at the desk.</div>
+      </div>
+
+      <div class="wrap hero-copy">
+        <p class="eyebrow">Travel disruptions. Covered.</p>
+        <h1>When your flight <br class="br-d">is cancelled, we’ve <br class="br-d"><em>got your back.</em></h1>
+        <p class="lead">Detour automatically pays for your meals, taxis and hotel <br class="br-d">when your flight is disrupted — before you have to ask. <br class="br-d">No receipts. No expense claims. Just support.</p>
+        <div class="cta">
+          <a class="pill-btn lg" href="/download">Get the app <svg><use href="#arrow"/></svg></a>
+          <a class="text-btn" href="#how">See how it works <svg><use href="#arrow"/></svg></a>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="lp-section">
-    <div class="lp-wrap">
-      <div class="lp-problem">
-        <div><h3>Paid out of pocket</h3><p>A cancellation at 11pm leaves the employee paying for a hotel, food and taxis on a personal card, then waiting weeks to be repaid.</p></div>
-        <div><h3>Invisible to the company</h3><p>The company has a duty of care, but sees nothing of what is happening or being spent until an expense report arrives.</p></div>
-        <div><h3>Money left on the table</h3><p>For flights leaving the EU, airlines owe meals and a hotel, and often €250 to €600 compensation under EU261. Most claims are never made.</p></div>
+    <!-- The problem -->
+    <section class="problem" id="problem">
+      <div class="wrap problem-in">
+        <div class="problem-copy">
+          <p class="eyebrow">The problem</p>
+          <h2>Travel disruptions <br class="br-d">cost more than just <br class="br-d"><em>a missed flight.</em></h2>
+          <p class="lead sm">When a flight is cancelled or badly delayed, employees are left <br class="br-d">out of pocket, companies are in the dark, and valuable <br class="br-d">compensation goes unclaimed.</p>
+        </div>
+        <div class="problem-cards">
+          <article class="pcard">
+            <span class="pcard-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4.5 8.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18V7.5A1.5 1.5 0 0 1 5.5 6H16"/><path d="m6 6 8.6-2.3a1 1 0 0 1 1.2.7l.6 2.1"/><path d="M20 12h-3a1.5 1.5 0 0 0 0 3h3"/></svg></span>
+            <h3>Out-of-pocket <br class="br-d">costs for travellers</h3>
+            <p>Employees often pay for meals, <br class="br-d">taxis and hotels themselves, <br class="br-d">usually late at night and in a <br class="br-d">foreign country. They keep <br class="br-d">receipts, file an expense claim <br class="br-d">and wait weeks to be repaid.</p>
+            <span class="pcard-foot"><svg><use href="#arrow"/></svg>The human cost</span>
+          </article>
+          <article class="pcard">
+            <span class="pcard-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path d="M4.5 3.5l15 17"/></svg></span>
+            <h3>Invisible disruption costs for companies</h3>
+            <p>The company has a duty of care <br class="br-d">but sees nothing until the <br class="br-d">expense report arrives. There’s <br class="br-d">no real-time view of what’s <br class="br-d">happening, where employees <br class="br-d">are or what they need.</p>
+            <span class="pcard-foot"><svg><use href="#arrow"/></svg>The operational cost</span>
+          </article>
+          <article class="pcard">
+            <span class="pcard-ic"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="4" r="1"/><circle cx="16" cy="5.07" r="1"/><circle cx="18.93" cy="8" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="18.93" cy="16" r="1"/><circle cx="16" cy="18.93" r="1"/><circle cx="12" cy="20" r="1"/><circle cx="8" cy="18.93" r="1"/><circle cx="5.07" cy="16" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="5.07" cy="8" r="1"/><circle cx="8" cy="5.07" r="1"/></svg></span>
+            <h3>Unclaimed EU261 compensation</h3>
+            <p>For flights leaving the EU, <br class="br-d">airlines owe meals, a hotel and <br class="br-d">often €250–€600 (EU261). <br class="br-d">Most of it is never claimed.</p>
+            <span class="pcard-foot"><svg><use href="#arrow"/></svg>The money left on the table</span>
+          </article>
+        </div>
       </div>
-    </div>
-  </section>
+      <img class="problem-photo" src="img/problem.jpg" alt="A stranded traveller looks out at a rainy runway" width="1280" height="365" loading="lazy">
+    </section>
 
-  <section class="lp-section alt" id="how">
-    <div class="lp-wrap">
-      <div class="lp-head"><div class="lp-eyebrow">How it works</div><h2>Detour follows the disruption, not the paperwork.</h2></div>
-      <ol class="lp-steps">
-        <li><span>1</span><h3>Watch</h3><p>Every trip on file is checked against a live flight status feed and the airline's emails.</p></li>
-        <li><span>2</span><h3>Detect</h3><p>A cancellation, a long delay or a missed connection opens cover, before the traveller has landed.</p></li>
-        <li><span>3</span><h3>Fund</h3><p>Today's meals and taxis go straight to their bank account, converted to their currency. The hotel is paid directly.</p></li>
-        <li><span>4</span><h3>Adapt</h3><p>Rebooked overnight? A hotel is added. Earlier seat? Payments not yet needed are cancelled. Outside policy goes to a manager.</p></li>
-        <li><span>5</span><h3>Close</h3><p>When they fly, cover ends. The company gets a summary of every payment, and no one files an expense claim.</p></li>
+    <!-- How it works -->
+    <section class="how" id="how">
+      <div class="how-photo">
+        <img src="img/how.jpg" alt="A traveller smiles at the airport, phone in hand" width="855" height="356" loading="lazy">
+        <div class="notif" aria-label="Detour notification: your flight is delayed, hotel booked, meals and taxi approved">
+          <div class="nt-head"><span class="nt-app"><svg><use href="#logo"/></svg></span><span>Detour</span><time>2m ago</time></div>
+          <div class="nt-title">Your flight is delayed.</div>
+          <div class="nt-sub">We’ve arranged your hotel and meals.</div>
+          <div class="nt-row"><span class="nt-ic"><svg><use href="#i-bed"/></svg></span><span class="nt-lbl">Hotel<b class="tag">Booked</b></span><svg class="nt-chev"><use href="#chev"/></svg></div>
+          <div class="nt-row"><span class="nt-ic meal"><svg><use href="#i-meal"/></svg></span><span class="nt-lbl">Meals<b class="tag">Approved</b></span><svg class="nt-chev"><use href="#chev"/></svg></div>
+          <div class="nt-row"><span class="nt-ic"><svg><use href="#i-car"/></svg></span><span class="nt-lbl">Taxi<b class="tag">Approved</b></span><svg class="nt-chev"><use href="#chev"/></svg></div>
+        </div>
+      </div>
+
+      <div class="wrap how-copy">
+        <p class="eyebrow">How it works</p>
+        <h2 class="h-how">From disruption <br class="br-d">to support — in <br class="br-d"><em>five simple steps.</em></h2>
+        <p class="lead sm">Detour monitors your flight, detects disruptions, and <br class="br-d">automatically gets you what you need — fast. No forms, <br class="br-d"> no hassle, no out-of-pocket costs.</p>
+      </div>
+
+      <ol class="wrap steps">
+        <li class="step">
+          <div class="step-top"><span class="step-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 15.5v-1.6l-8-5V3.5a1.5 1.5 0 0 0-3 0v5.4l-8 5v1.6l8-2.5v5.5l-2 1.5V21l3.5-1 3.5 1v-1.5l-2-1.5V13z" transform="rotate(45 12 12)"/></svg></span><span class="step-n">01</span></div>
+          <h3>Watch</h3>
+          <p class="step-lead">We monitor your flight in <br class="br-d">real time, 24/7.</p>
+          <p>Detour tracks flight status, schedules <br class="br-d">and changes as they happen.</p>
+        </li>
+        <li class="step">
+          <div class="step-top"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg></span><span class="step-n">02</span></div>
+          <h3>Detect</h3>
+          <p class="step-lead">We identify disruptions <br class="br-d">before you do.</p>
+          <p>Cancellations, delays and missed <br class="br-d">connections trigger instant action.</p>
+        </li>
+        <li class="step">
+          <div class="step-top"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4.5 8.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18V7.5A1.5 1.5 0 0 1 5.5 6H16"/><path d="M20 12h-3a1.5 1.5 0 0 0 0 3h3"/></svg></span><span class="step-n">03</span></div>
+          <h3>Fund</h3>
+          <p class="step-lead">We send you what you need, <br class="br-d">automatically.</p>
+          <p>Meals and taxi money to your phone. <br class="br-d">Hotels are paid directly, no receipts.</p>
+        </li>
+        <li class="step">
+          <div class="step-top"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.8" fill="#060a0d"/><circle cx="15" cy="12" r="1.8" fill="#060a0d"/><circle cx="8" cy="17" r="1.8" fill="#060a0d"/></svg></span><span class="step-n">04</span></div>
+          <h3>Adapt</h3>
+          <p class="step-lead">We adjust as your plans change.</p>
+          <p>If your plans change or approval <br class="br-d">is needed, we adapt payments <br class="br-d">in real time.</p>
+        </li>
+        <li class="step">
+          <div class="step-top"><span class="step-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m8.2 12.2 2.6 2.6 5-5.2"/></svg></span><span class="step-n">05</span></div>
+          <h3>Close</h3>
+          <p class="step-lead">We end coverage when <br class="br-d">you’re on your way.</p>
+          <p>Once you fly home or onward, <br class="br-d">your Detour support stops.</p>
+        </li>
       </ol>
-    </div>
-  </section>
+    </section>
 
-  <section class="lp-section" id="safeguards">
-    <div class="lp-wrap">
-      <div class="lp-head"><div class="lp-eyebrow">Safeguards</div><h2>An agent that can move money, with the numbers kept out of its hands.</h2></div>
-      <div class="lp-grid">
-        <div class="lp-tile"><h3>Policy sets every amount</h3><p>City rates, nights and limits come from rules in code. The model reads emails and talks to the traveller; it can only propose a change.</p></div>
-        <div class="lp-tile"><h3>Hotel money goes to the hotel</h3><p>The largest cost never passes through the traveller. It is paid to the hotel itself.</p></div>
-        <div class="lp-tile"><h3>Only today is sent</h3><p>Later days and nights are scheduled, not sent, and are cancelled the moment they are not needed.</p></div>
-        <div class="lp-tile"><h3>An email alone moves nothing</h3><p>A disruption must match the flight status feed. A forwarded or spoofed email cannot open or raise cover.</p></div>
-        <div class="lp-tile"><h3>Approvals carry the evidence</h3><p>Anything over policy waits for a travel manager, with the amount, expiry, flight status and airline messages attached.</p></div>
-        <div class="lp-tile"><h3>One cover per trip</h3><p>Every payment carries a stable request id, so a retry can never pay twice.</p></div>
+    <!-- Security and For companies: no design yet, so they reuse the problem cards' style -->
+    <section class="more" id="security">
+      <div class="wrap">
+        <p class="eyebrow">Security</p>
+        <h2>An agent that can move money, <em>with the numbers kept out of its hands.</em></h2>
+        <div class="more-grid">
+          <article class="mcard"><h3>Policy sets every amount</h3><p>City rates, nights and limits come from rules in code. The AI reads airline messages and talks to the traveller; it can only propose a change.</p></article>
+          <article class="mcard"><h3>Hotel money goes to the hotel</h3><p>The largest cost never passes through the traveller. It is paid to the hotel itself.</p></article>
+          <article class="mcard"><h3>Only today is sent</h3><p>Later days and nights are scheduled, not sent, and are cancelled the moment they are not needed.</p></article>
+          <article class="mcard"><h3>A message alone moves nothing</h3><p>A disruption must match the flight status feed. A forwarded or fake airline message cannot open or raise cover.</p></article>
+          <article class="mcard"><h3>Approvals carry the evidence</h3><p>Anything over policy waits for a travel manager, with the amount, flight status and airline messages attached.</p></article>
+          <article class="mcard"><h3>One cover per trip</h3><p>Every payment carries a stable request id, so a retry can never pay twice.</p></article>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="lp-section alt" id="airwallex">
-    <div class="lp-wrap lp-split">
-      <div class="lp-head"><div class="lp-eyebrow">Built on Airwallex</div><h2>Real payment rails, from the first minute of the disruption.</h2>
-        <p class="lp-lead small">Built for the Airwallex Agentic Banking Hackathon. Every payment in the demo is a real call to the Airwallex sandbox.</p></div>
-      <ul class="lp-list">
-        <li><b>Transfers and beneficiaries</b><span>Allowances to the traveller and payments to the hotel, sent now or scheduled for later and cancellable.</span></li>
-        <li><b>FX conversion</b><span>Paid in the stranded city's currency and received in the traveller's own: euros in, Singapore dollars out.</span></li>
-        <li><b>Issuing</b><span>A virtual card version, locked to meals, taxis and hotels and expiring when they fly, is built in and ready.</span></li>
-        <li><b>Agent with typed tools</b><span>Reads airline emails, understands the traveller and proposes changes, never with access to keys or amounts.</span></li>
-      </ul>
-    </div>
-  </section>
+    <section class="more" id="companies">
+      <div class="wrap">
+        <p class="eyebrow">For companies</p>
+        <h2>Real payment rails, <em>from the first minute of the disruption.</em></h2>
+        <div class="more-grid">
+          <article class="mcard"><h3>Transfers and payees</h3><p>Allowances to the traveller and payments to the hotel on Airwallex, sent now or scheduled for later and cancellable.</p></article>
+          <article class="mcard"><h3>Paid in their own currency</h3><p>Charged in the stranded city’s currency and received in the traveller’s own: euros in, Singapore dollars out.</p></article>
+          <article class="mcard"><h3>One app, two roles</h3><p>Travellers see what is covered. Travel managers approve the exceptions and see every payment as it happens.</p></article>
+        </div>
+        <div class="cta more-cta">
+          <a class="pill-btn lg" href="/demo">Watch the live demo <svg><use href="#arrow"/></svg></a>
+          <a class="text-btn" href="/download">Get the app <svg><use href="#arrow"/></svg></a>
+        </div>
+      </div>
+    </section>
+  </main>
 
-  <section class="lp-section">
-    <div class="lp-wrap lp-final">
-      <h2>Watch Ada miss her connection in Frankfurt.</h2>
-      <p>See the travel manager's phone and Ada's phone side by side: the money arriving before she lands, a hotel added, a second night approved, and the payments she no longer needs cancelled.</p>
-      <a class="btn primary lg" href="/demo">Open the live demo</a>
-    </div>
-  </section>
-
-  <footer class="lp-foot">
-    <div class="lp-wrap lp-foot-in">
-      <span>Detour · Airwallex Agentic Banking Hackathon 2026</span>
-      <span>Demo data is fictional. Payments run in the Airwallex sandbox; no real money moves.</span>
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <a class="brand sm" href="/"><svg class="brand-mark"><use href="#logo"/></svg>Detour</a>
+      <span>Built for the Airwallex Agentic Banking Hackathon 2026. Demo data is fictional; payments run in the Airwallex sandbox.</span>
     </div>
   </footer>
 </body>
