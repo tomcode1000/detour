@@ -18,7 +18,7 @@ const liveInvite = () => S.account?.invites.find((i) => i.live);
 const first = () => traveller().split(' ')[0];
 const mgr = () => S.account?.company.manager || S.manager;
 const tzOf = (code) => AIRPORTS[code]?.[3] || 'UTC';
-const PAY_PILL = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill info">Scheduled</span>', CANCELLED: '<span class="pill bad">Cancelled</span>' };
+const PAY_PILL = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill info">Scheduled</span>', CANCELLED: '<span class="pill bad">Cancelled</span>', DECLINED: '<span class="pill bad">Declined</span>' };
 const ADA = '<span class="avatar md photo"><img src="/img/app/ada.jpg" alt=""></span>';
 
 // ---------------------------------------------------------------- start, sign up, sign in
@@ -154,7 +154,7 @@ function momentsFor(a, b) {
     const toHotel = sent.filter((l) => l.role === 'hotel');
     const parts = [];
     if (toAda.length) parts.push(`${money(sum(toAda), toAda[0].currency)} to ${first()}`);
-    if (toHotel.length) parts.push(`${money(sum(toHotel), toHotel[0].currency)} to ${toHotel[0].payeeName.replace(/\s+GmbH$/, '')}`);
+    if (toHotel.length) parts.push(`${money(sum(toHotel), toHotel[0].currency)} to ${toHotel[0].payeeName.replace(/\s+GmbH$/, '')}${toHotel[0].method === 'card' ? ` on the hotel card ••${toHotel[0].card}` : ''}`);
     toast(`Paid ${parts.join(' and ')}.`);
   }
 
@@ -415,6 +415,7 @@ function renderPayments() {
     ['bed', 'To hotels', sum(sent.filter((l) => l.role === 'hotel'))],
     ['doc', 'Fees', sum(sent, (l) => l.fee || 0)],
   ].map(([ic, k, v]) => `<div class="tile">${icon(ic, 'c-cyan')}<b style="font-size:17px">${money(v, cur)}</b><span style="font-size:12.5px">${k}</span></div>`).join('');
+  $('p-card').innerHTML = S.hotelCard ? hotelCardHtml(S.hotelCard, cur) : '';
   if (S.mode !== 'transfer') {
     $('p-list').innerHTML = S.transactions.length ? S.transactions.slice().reverse().map((t) => `<div class="row ${t.status === 'APPROVED' ? '' : 'off'}"><span class="ic">${icon('card')}</span><div class="grow"><b>${esc(t.merchant)}</b><small>${esc(dayHm(t.at, S.tz))} · ${t.status === 'APPROVED' ? 'Approved' : esc(t.reason)}</small></div><div class="end"><b>${money(t.amount, t.currency)}</b></div></div>`).join('') : '<div class="empty">No card payments yet.</div>';
     return;
@@ -422,8 +423,14 @@ function renderPayments() {
   $('p-list').innerHTML = pay.length ? pay.slice().reverse().map((l) => {
     const when = l.status === 'SCHEDULED' ? `Due ${dateHm(l.payAt, S.tz)}` : l.status === 'CANCELLED' ? 'Not needed' : dateHm(l.payAt, S.tz);
     const lead = l.role === 'hotel' ? `<span class="ic">${icon('building')}</span>` : ADA;
-    return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}">${lead}<div class="grow"><b>${esc(l.role === 'hotel' ? l.payeeName.replace(/\s+GmbH$/, '') : traveller())}</b><small>${esc(l.what)}</small><small>${esc(when)}</small></div><div class="end"><b>${money(l.amount, l.currency)}</b><div style="margin-top:6px">${PAY_PILL[l.status] || ''}</div></div></div>`;
+    return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}">${lead}<div class="grow"><b>${esc(l.role === 'hotel' ? l.payeeName.replace(/\s+GmbH$/, '') : traveller())}</b><small>${esc(l.what)}${l.method === 'card' ? ` · Hotel card ••${esc(l.card)}` : ''}</small><small>${esc(when)}</small></div><div class="end"><b>${money(l.amount, l.currency)}</b><div style="margin-top:6px">${PAY_PILL[l.status] || ''}</div></div></div>`;
   }).join('') : '<div class="empty">No payments yet. They appear the moment a trip is disrupted.</div>';
+}
+
+// The hotels-only Airwallex card the hotel nights are charged to.
+function hotelCardHtml(c, cur) {
+  const open = c.status === 'ACTIVE';
+  return `<div class="section-head"><h2>Hotel card</h2></div><div class="card"><div class="row"><span class="ic purple">${icon('card')}</span><div class="grow"><b>Virtual card ••${esc(c.last4 || '----')}</b><small>Hotels only · up to ${money(c.limit, cur)} · ${open ? `closes ${esc(dateHm(c.activeTo, S.tz))}` : 'closed with the trip'}</small><small>Issued on Airwallex for ${esc(traveller())}'s stay</small></div><span class="pill ${open ? 'ok' : 'plain'}">${open ? 'Active' : 'Closed'}</span></div></div>`;
 }
 
 function renderPolicy() {

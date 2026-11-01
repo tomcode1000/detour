@@ -39,6 +39,14 @@ export function describePayments({ created = [], cancelled = [] }, tz) {
     parts.push(`scheduled ${fmtMoney(l.amount, l.currency)} for ${l.what.toLowerCase()}, arriving ${fmtWhen(l.payAt, tz)}`);
   }
   for (const l of created.filter((x) => x.role === 'hotel')) {
+    if (l.method === 'card') {
+      parts.push(l.status === 'SENT'
+        ? `paid ${l.payeeName} ${fmtMoney(l.amount, l.currency)} for ${l.what.toLowerCase()} on your Detour hotel card ending ${l.card} - nothing to pay at the desk`
+        : l.status === 'DECLINED'
+          ? `tried to pay ${l.payeeName} ${fmtMoney(l.amount, l.currency)} for ${l.what.toLowerCase()} on your hotel card, but it was declined - your travel manager has been told`
+          : `will pay ${l.payeeName} ${fmtMoney(l.amount, l.currency)} for ${l.what.toLowerCase()} on your hotel card on ${fmtWhen(l.payAt, tz)}`);
+      continue;
+    }
     parts.push(l.status === 'SENT'
       ? `paid ${l.payeeName} ${fmtMoney(l.amount, l.currency)} directly for ${l.what.toLowerCase()} - just give your name at the desk`
       : `will pay ${l.payeeName} ${fmtMoney(l.amount, l.currency)} for ${l.what.toLowerCase()} on ${fmtWhen(l.payAt, tz)}`);
@@ -109,7 +117,7 @@ export function describeOutcome(outcome, card, policy) {
     case 'raised': return outcome.mode === 'transfer'
       ? `Done. I've sent you ${fmtMoney(outcome.raise, card.controls.currency)} extra - it's within policy.`
       : `Done. I've raised your card by ${fmtMoney(outcome.raise, card.controls.currency)}. Now ${facts}.`;
-    case 'covered_direct': return `Your hotel is already paid directly by your company - just give your name at the desk. If they still ask for a deposit, tell me the amount and I'll sort it.`;
+    case 'covered_direct': return `Your hotel is already paid by your company - nothing to pay at the desk. If they still ask for a deposit, tell me the amount and I'll sort it.`;
     case 'escalate': return `${outcome.why} I've sent it to ${policy.travel_manager} for approval and will let you know.`;
     case 'pending': return `${policy.travel_manager} is already looking at it - I'll message you the moment they decide.`;
     case 'reject': return `Sorry - ${outcome.why}`;

@@ -83,7 +83,7 @@ test('hotel deposit question: the hotel is already paid directly', async () => {
   const e = engine();
   await playUntil(e, (x) => x.card?.controls.nights === 1);
   await e.chat('The hotel wants a 150 EUR deposit');
-  assert.match(e.messages.at(-1).text, /already paid directly/);
+  assert.match(e.messages.at(-1).text, /already paid by your company/);
 });
 
 test('a small extra for food is sent straight away; a big one goes to the manager', async () => {
@@ -95,4 +95,36 @@ test('a small extra for food is sent straight away; a big one goes to the manage
   await e.chat('I need 500 EUR for food');
   assert.equal(e.approvals.at(-1).kind, 'raise');
   assert.equal(e.approvals.at(-1).status, 'PENDING');
+});
+
+test('Ada with a hotel card: nights charged to a hotels-only card, limit follows the plan, card closed at the end', async () => {
+  const e = new Engine({
+    scenario, policy, agent: createStandinAgent(), runId: 'test',
+    makeFunding: ({ clock, runKey }) => createFunding({ env: { FUNDING: 'hotel-card-local' }, clock, runKey, scenario, policy }),
+  });
+  assert.equal(e.mode, 'transfer');
+  await playUntil(e, (x) => x.card);
+  assert.equal(e.funding.hotelCard(), null, 'no card until a night is needed');
+
+  // Rebooked to tomorrow: the card is made for night 1 and the hotel charges it at once.
+  await playUntil(e, (x) => x.legs.includes('DA902'));
+  assert.equal(byKey(e, 'hotel-1').method, 'card');
+  assert.equal(byKey(e, 'hotel-1').status, 'SENT');
+  assert.equal(e.funding.hotelCard().limit, 180);
+  assert.match(e.messages.at(-1).text, /hotel card ending \d{4}/);
+
+  // Night 2 approved: the limit grows; then the earlier seat drops it again before it is charged.
+  await playUntil(e, (x) => x.waiting && x.approvals.some((a) => a.status === 'PENDING'));
+  await e.decide(e.approvals.find((a) => a.status === 'PENDING').id, 'approve');
+  assert.equal(byKey(e, 'hotel-2').status, 'SCHEDULED');
+  assert.equal(e.funding.hotelCard().limit, 360);
+  await playUntil(e, (x) => x.legs.includes('DA910'));
+  assert.equal(byKey(e, 'hotel-2').status, 'CANCELLED');
+  assert.equal(e.funding.hotelCard().limit, 180);
+
+  await playUntil(e, (x) => x.finished);
+  assert.equal(e.funding.hotelCard().status, 'CLOSED');
+  assert.equal(e.summary.toHotel, 180);
+  assert.equal(e.summary.toTraveller, 180);
+  assert.equal(e.log.filter((l) => l.source === 'error').length, 0, JSON.stringify(e.log.filter((l) => l.source === 'error')));
 });

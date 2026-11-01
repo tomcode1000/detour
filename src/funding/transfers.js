@@ -4,6 +4,8 @@
 //  - only today's money is sent now; later days and nights are SCHEDULED, and cancelled
 //    if the trip ends first, so money for days not stranded never leaves the company.
 // It takes the same plan the rules make for a card and keeps the payments in line with it.
+// With a hotel card, the hotel nights are charged to a hotels-only virtual card instead of
+// sent by transfer: the card's limit is always the nights still planned, and it closes with the trip.
 import { localParts, localToUtc } from '../time.js';
 
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -34,15 +36,53 @@ export function paymentsFor(controls) {
   return items.filter((i) => i.payAt <= activeTo).map((i) => ({ ...i, currency }));
 }
 
-export function createTransferFunding({ clock, backend, payees }) {
+const HOTEL_MCCS = ['7011'];
+
+export function createTransferFunding({ clock, backend, payees, hotelCard = null, traveller = null }) {
   const ledger = [];
   let allowance = null;
   let current = null; // the plan being paid, so the hotel payee matches the stranded city
+  let card = null;    // the hotels-only card, when there is one
+  const onCard = (item) => hotelCard && item.role === 'hotel';
+
+  // The card's limit covers every night charged or still planned, and nothing more.
+  async function syncCard(controls, want) {
+    const charged = ledger.filter((l) => l.method === 'card' && l.status === 'SENT');
+    const planned = want.filter((w) => w.role === 'hotel' && !charged.some((l) => l.key === w.key));
+    const limit = round2([...charged, ...planned].reduce((sum, l) => sum + l.amount, 0));
+    if (!card && !planned.length) return;
+    const c = { currency: controls.currency, mccs: HOTEL_MCCS, limit, activeFrom: controls.activeFrom, activeTo: controls.activeTo };
+    if (!card) {
+      const issued = await hotelCard.issue({ traveller, controls: c, requestId: `${allowance.id}-hotel` });
+      card = { id: issued.id, last4: issued.last4, status: issued.status, limit, activeTo: c.activeTo };
+    } else if (card.limit !== limit || card.activeTo !== c.activeTo) {
+      await hotelCard.update(card.id, c);
+      card.limit = limit;
+      card.activeTo = c.activeTo;
+    }
+  }
+
+  // The hotel charges the card at check-in. A charge right after the card is made can be
+  // refused while the card's window settles, so that one reason gets a single retry.
+  async function charge(entry) {
+    const ask = () => hotelCard.authorize(card.id, { merchant: entry.payeeName, mcc: HOTEL_MCCS[0], amount: entry.amount, currency: entry.currency, label: entry.key });
+    let tx = await ask();
+    if (tx.reason === 'OUT_OF_ALLOWED_TIME_RANGE' && hotelCard.name === 'airwallex') { await new Promise((ok) => setTimeout(ok, 3000)); tx = await ask(); }
+    entry.id = tx.id;
+    entry.status = tx.status === 'APPROVED' ? 'SENT' : 'DECLINED';
+    entry.reason = tx.reason || null;
+    return entry;
+  }
 
   async function place(item) {
     const now = clock();
     const due = item.payAt <= now;
     const payee = payees(item.role, current);
+    if (onCard(item)) {
+      const entry = { ...item, method: 'card', card: card.last4, payeeName: payee.name, id: null, status: 'SCHEDULED', received: null, fee: 0, placedAt: now };
+      ledger.push(entry);
+      return due ? charge(entry) : entry;
+    }
     const attempt = ledger.filter((l) => l.key === item.key).length;
     const res = await backend.send({ ...item, attemptKey: `${item.key}#${attempt}`, payee, scheduleDays: due ? 0 : Math.max(1, Math.ceil((item.payAt - now) / 864e5)), reference: `Detour ${item.what}`.slice(0, 30) });
     const entry = { ...item, payeeName: payee.name, id: res.id, status: due ? 'SENT' : 'SCHEDULED', received: res.received, fee: res.fee, placedAt: now };
@@ -51,21 +91,27 @@ export function createTransferFunding({ clock, backend, payees }) {
   }
 
   async function cancel(entry) {
-    await backend.cancel(entry.id);
+    if (entry.method !== 'card') await backend.cancel(entry.id); // a night not yet charged costs nothing to drop
     entry.status = 'CANCELLED';
     entry.cancelledAt = clock();
     return entry;
   }
 
-  // Scheduled payments whose time has come are now sent (the bank executes them on the date).
-  function tick() {
-    for (const l of ledger) if (l.status === 'SCHEDULED' && l.payAt <= clock()) l.status = 'SENT';
+  // Scheduled payments whose time has come are now sent (the bank executes them on the date),
+  // and hotel nights whose check-in has come are charged to the card.
+  async function tick() {
+    for (const l of ledger) {
+      if (l.status !== 'SCHEDULED' || l.payAt > clock()) continue;
+      if (l.method === 'card') await charge(l);
+      else l.status = 'SENT';
+    }
   }
 
   async function reconcile(controls) {
     current = controls;
-    tick();
+    await tick();
     const want = paymentsFor(controls);
+    if (hotelCard) await syncCard(controls, want);
     const created = [];
     const cancelled = [];
     for (const w of want) {
@@ -79,6 +125,7 @@ export function createTransferFunding({ clock, backend, payees }) {
     for (const l of ledger) {
       if (l.status === 'SCHEDULED' && !l.key.startsWith('extra') && !want.some((w) => w.key === l.key)) cancelled.push(await cancel(l));
     }
+    if (card && cancelled.some((l) => l.method === 'card')) await syncCard(controls, want);
     // Approved one-off raises go to the traveller straight away, as top-ups.
     const extrasPaid = round2(ledger.filter((l) => l.key.startsWith('extra') && l.status !== 'CANCELLED').reduce((s, l) => s + l.amount, 0));
     const extraDue = round2((controls.breakdown.extras || 0) - extrasPaid);
@@ -106,12 +153,13 @@ export function createTransferFunding({ clock, backend, payees }) {
       return { ...allowance, changes };
     },
 
-    // Trip over: everything not yet paid is cancelled.
+    // Trip over: everything not yet paid is cancelled, and the hotel card is closed.
     async setStatus(id, status) {
-      tick();
+      await tick();
       const cancelled = [];
       if (status !== 'ACTIVE') {
         for (const l of ledger) if (l.status === 'SCHEDULED') cancelled.push(await cancel(l));
+        if (card && card.status !== 'CLOSED') card.status = (await hotelCard.setStatus(card.id, 'CLOSED')).status;
       }
       allowance.status = status;
       return { ...allowance, changes: { created: [], cancelled } };
@@ -123,5 +171,6 @@ export function createTransferFunding({ clock, backend, payees }) {
     async transactions() { return []; },
     tick,
     ledger: () => ledger.map((l) => ({ ...l })),
+    hotelCard: () => card && { ...card },
   };
 }

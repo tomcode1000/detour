@@ -111,7 +111,7 @@ export class Engine {
       this.waiting = false;
       const ev = this.scenario.events[this.cursor++];
       this.clock = Math.max(this.clock, parseTime(ev.at));
-      this.funding.tick?.();
+      await this.funding.tick?.();
       await this.apply(ev);
       await this.reconcile();
     } catch (e) {
@@ -589,6 +589,7 @@ export class Engine {
       mode: this.mode,
       adapters: { funding: this.funding.label, fundingName: this.funding.name, agent: this.agent.label, agentName: this.agent.name },
       payments: this.funding.ledger ? this.funding.ledger() : null,
+      hotelCard: this.funding.hotelCard ? this.funding.hotelCard() : null,
       company: this.policy.company,
       manager: this.policy.travel_manager,
       ratesNote: this.policy.rates_note,

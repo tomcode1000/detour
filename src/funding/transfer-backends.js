@@ -62,8 +62,21 @@ export function createAirwallexTransferBackend({ env, runKey }) {
       return { id: r.id, received: { amount: r.transfer_amount, currency: r.transfer_currency }, fee: r.fee_amount ?? null };
     },
 
+    // A transfer made seconds ago can refuse a cancel while Airwallex is still booking it
+    // (the demo moves faster than real time), so check its status and try again briefly.
     async cancel(id) {
-      await call('POST', `/api/v1/transfers/${id}/cancel`, {});
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await call('POST', `/api/v1/transfers/${id}/cancel`, {});
+          return;
+        } catch (e) {
+          if (e.status !== 400) throw e;
+          const t = await call('GET', `/api/v1/transfers/${id}`);
+          if (t.status === 'CANCELLED') return;
+          if (attempt >= 4) throw e;
+          await new Promise((ok) => setTimeout(ok, 2000));
+        }
+      }
     },
   };
 }

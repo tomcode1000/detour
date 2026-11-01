@@ -199,7 +199,9 @@ function momentsFor(a, b) {
   if (hotel.length) {
     moment({
       tone: 'ok', icon: 'bed', title: 'Your hotel is paid',
-      sub: `${hotel[0].payeeName.replace(/\s+GmbH$/, '')} has been paid by ${companyName(b)}. Just give your name at the desk.`,
+      sub: hotel[0].method === 'card'
+        ? `${hotel[0].payeeName.replace(/\s+GmbH$/, '')} charged your Detour hotel card ••${hotel[0].card}. Nothing to pay at the desk.`
+        : `${hotel[0].payeeName.replace(/\s+GmbH$/, '')} has been paid by ${companyName(b)}. Just give your name at the desk.`,
       amount: money(sum(hotel), hotel[0].currency), amountNote: hotel.map((l) => l.what).join(' · '),
       primary: { label: 'Done' },
     });
@@ -350,11 +352,13 @@ function renderTrips() {
   const c = live() ? S?.card : null;
   if (c && S.mode === 'transfer') {
     const pays = S.payments || [];
-    $('t-cover').innerHTML = `<div class="section-head"><h2>Payments for this stay</h2></div><div class="card">${pays.slice().reverse().map((l) => {
+    const hc = S.hotelCard;
+    const cardHtml = hc ? `<div class="section-head"><h2>Your hotel card</h2></div><div class="card"><div class="row"><span class="ic purple">${icon('card')}</span><div class="grow"><b>Virtual card ••${esc(hc.last4 || '----')}</b><small>Hotels only · up to ${esc(money(hc.limit, c.controls.currency))} · ${hc.status === 'ACTIVE' ? 'the hotel charges it at check-in' : 'closed when your trip ended'}</small></div><span class="pill ${hc.status === 'ACTIVE' ? 'ok' : 'plain'}">${hc.status === 'ACTIVE' ? 'Active' : 'Closed'}</span></div></div>` : '';
+    $('t-cover').innerHTML = `${cardHtml}<div class="section-head"><h2>Payments for this stay</h2></div><div class="card">${pays.slice().reverse().map((l) => {
       const when = l.status === 'SENT' ? `Sent ${dayHm(l.payAt, S.tz)}` : l.status === 'SCHEDULED' ? `Due ${dayHm(l.payAt, S.tz)}` : 'Not needed';
-      const pill = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill warn">Scheduled</span>', CANCELLED: '<span class="pill plain">Cancelled</span>' }[l.status] || '';
+      const pill = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill warn">Scheduled</span>', CANCELLED: '<span class="pill plain">Cancelled</span>', DECLINED: '<span class="pill bad">Declined</span>' }[l.status] || '';
       const amt = l.role === 'traveller' && l.received && l.received.currency !== l.currency ? money(l.received.amount, l.received.currency) : money(l.amount, l.currency);
-      return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}"><span class="ic ${l.role === 'hotel' ? 'purple' : ''}">${icon(l.role === 'hotel' ? 'bed' : /meals/.test(l.what) ? 'meal' : /Taxi/.test(l.what) ? 'car' : 'wallet')}</span><div class="grow"><b>${esc(l.what)}</b><small>${l.role === 'hotel' ? 'Paid to the hotel' : 'To your account'} · ${esc(when)}</small></div><div class="end"><b>${esc(amt)}</b>${pill}</div></div>`;
+      return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}"><span class="ic ${l.role === 'hotel' ? 'purple' : ''}">${icon(l.role === 'hotel' ? 'bed' : /meals/.test(l.what) ? 'meal' : /Taxi/.test(l.what) ? 'car' : 'wallet')}</span><div class="grow"><b>${esc(l.what)}</b><small>${l.method === 'card' ? `Hotel card ••${esc(l.card)}` : l.role === 'hotel' ? 'Paid to the hotel' : 'To your account'} · ${esc(when)}</small></div><div class="end"><b>${esc(amt)}</b>${pill}</div></div>`;
     }).join('') || '<div class="empty">No payments yet.</div>'}</div>`;
   } else {
     $('t-cover').innerHTML = '';

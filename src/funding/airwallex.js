@@ -1,5 +1,5 @@
-// Airwallex Issuing in the sandbox. Written against the documented API; card calls are
-// NOT yet tested live because the sandbox account cannot issue cards (BRIEF section 3).
+// Airwallex Issuing in the sandbox. Tested live on 1 Nov 2026 (Singapore sandbox account):
+// issue, hotel-only MCC decline, limit raise, simulated charges, close.
 // Never logs the API key, the token, or card numbers.
 import { createAirwallexClient } from './airwallex-client.js';
 
@@ -19,13 +19,26 @@ export function createAirwallexFunding({ env, clock }) {
       allowed_currencies: [c.currency],
       allowed_merchant_categories: c.mccs,
       transaction_limits: { currency: c.currency, limits: [{ amount: c.limit, interval: 'ALL_TIME' }] },
-      active_from: stamp(Date.now() - 60e3),
+      active_from: stamp(Date.now() - 10 * 60e3), // a little early, so a charge right after issuing is inside the window
       active_to: stamp(toReal(c.activeTo)),
     };
   }
 
+  // Airwallex allows one cardholder per email, so a traveller from an earlier run is reused.
+  async function findCardholder(email) {
+    for (let page = 0; page < 10; page++) {
+      const r = await call('GET', `/api/v1/issuing/cardholders?page_num=${page}&page_size=100`);
+      const found = (r.items || []).find((c) => c.email?.toLowerCase() === email.toLowerCase());
+      if (found) return found.cardholder_id;
+      if (!r.has_more) return null;
+    }
+    return null;
+  }
+
   async function ensureCardholder(traveller) {
     if (cardholders.has(traveller.id)) return cardholders.get(traveller.id);
+    const existing = await findCardholder(traveller.email);
+    if (existing) { cardholders.set(traveller.id, existing); return existing; }
     const created = await call('POST', '/api/v1/issuing/cardholders/create', {
       type: 'INDIVIDUAL',
       email: traveller.email,
@@ -79,7 +92,6 @@ export function createAirwallexFunding({ env, clock }) {
       return view(card, controls);
     },
 
-    // TODO(verify when cards work): field name for status on update.
     async setStatus(cardId, status) {
       const card = await call('POST', `/api/v1/issuing/cards/${cardId}/update`, { card_status: status });
       return { id: cardId, status: card.card_status || status };
@@ -111,7 +123,7 @@ export function createAirwallexFunding({ env, clock }) {
       const r = await call('GET', `/api/v1/issuing/authorizations?card_id=${cardId}&page_size=100`);
       return (r.items || []).map((a) => ({
         id: a.transaction_id, cardId, merchant: a.merchant?.name, mcc: a.merchant?.category_code,
-        amount: a.billing_amount ?? a.transaction_amount, currency: a.billing_currency ?? a.transaction_currency,
+        amount: Math.abs(a.billing_amount ?? a.transaction_amount), currency: a.billing_currency ?? a.transaction_currency,
         status: a.status === 'FAILED' ? 'DECLINED' : 'APPROVED', reason: a.failure_reason || null,
       }));
     },
