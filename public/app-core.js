@@ -101,7 +101,7 @@ const ICONS = {
   sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
 };
 document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8bdcff"/><stop offset="1" stop-color="#2b9de0"/></linearGradient>
+  <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3ecf4"/><stop offset="1" stop-color="#8fa8c1"/></linearGradient>
   <symbol id="logo" viewBox="0 0 32 35"><path fill="url(#logo-grad)" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="#04111b" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></symbol>
   ${Object.entries(ICONS).map(([k, d]) => `<symbol id="i-${k}" viewBox="0 0 24 24"><path d="${d}"/></symbol>`).join('')}
 </defs></svg>`);
@@ -181,6 +181,49 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-back]')) goBack();
 });
 
+// ---------------------------------------------------------------- moments
+// One at a time, queued: { tone: ok|warn|bad|info, icon, title, sub, amount, amountNote, rows: [[icon, label, value]],
+// ref, progress, primary: { label, go?, run? }, secondary: { label, go?, run? } }
+const momentQueue = [];
+let momentOpen = false;
+function moment(m) {
+  if (params.has('snapshot')) return;
+  momentQueue.push(m);
+  if (!momentOpen) nextMoment();
+}
+function nextMoment() {
+  const m = momentQueue.shift();
+  if (!m) { momentOpen = false; return; }
+  momentOpen = true;
+  const app = document.querySelector('.app');
+  const el = document.createElement('div');
+  el.className = 'moment-scrim';
+  const btn = (b, cls) => (b ? `<button class="btn ${cls} block" data-m="${cls}">${esc(b.label)}${cls === 'primary' ? icon('arrow') : ''}</button>` : '');
+  el.innerHTML = `<section class="moment" role="dialog" aria-live="assertive" aria-label="${esc(m.title)}">
+    <div class="grab"></div>
+    <div class="moment-mark ${m.tone || 'ok'}">${icon(m.icon || 'check')}</div>
+    <h2>${esc(m.title)}</h2>
+    ${m.sub ? `<p class="sub">${esc(m.sub)}</p>` : ''}
+    ${m.amount ? `<div class="amount">${esc(m.amount)}${m.amountNote ? `<small>${esc(m.amountNote)}</small>` : ''}</div>` : ''}
+    ${m.progress ? '<div class="moment-progress"><i></i></div>' : ''}
+    ${m.rows?.length ? `<div class="card">${m.rows.map(([ic, label, value, cls]) => `<div class="row" style="min-height:54px"><span class="ic ${cls || ''}" style="width:36px;height:36px">${icon(ic)}</span><div class="grow"><b style="font-size:14.5px;font-weight:500">${esc(label)}</b></div>${value ? `<b>${esc(value)}</b>` : ''}</div>`).join('')}</div>` : ''}
+    ${m.ref ? `<p class="ref">${esc(m.ref)}</p>` : ''}
+    ${btn(m.primary || { label: 'Done' }, 'primary')}${btn(m.secondary, 'quiet')}
+  </section>`;
+  const close = (b) => {
+    el.remove();
+    if (b?.go) go(b.go, { replace: true });
+    b?.run?.();
+    nextMoment();
+  };
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-m]');
+    if (b) close(b.dataset.m === 'primary' ? (m.primary || {}) : m.secondary);
+    else if (e.target === el) close(null);
+  });
+  app.appendChild(el);
+}
+
 // ---------------------------------------------------------------- route map (Leaflet, loaded when first needed)
 let leafletReady = null;
 function loadLeaflet() {
@@ -236,8 +279,8 @@ async function drawRoute(el, legs, { stay = null } = {}) {
   m.layer.clearLayers();
   const pts = [];
   const STYLE = {
-    done: { color: '#4cc3f7', weight: 2, opacity: 0.45 },
-    next: { color: '#4cc3f7', weight: 2.5, opacity: 0.95 },
+    done: { color: '#a9bfd6', weight: 2, opacity: 0.45 },
+    next: { color: '#a9bfd6', weight: 2.5, opacity: 0.95 },
     broken: { color: '#ff6b6b', weight: 2.5, opacity: 0.9, dashArray: '6 7' },
     new: { color: '#45d28e', weight: 2.5, opacity: 0.95 },
   };

@@ -111,6 +111,7 @@ $('pe-form').onsubmit = async (e) => {
 
 // ---------------------------------------------------------------- render
 function render(s) {
+  const before = S;
   S = s;
   const pending = s.approvals.filter((a) => a.status === 'PENDING');
   $('appr-count').hidden = !pending.length;
@@ -126,6 +127,50 @@ function render(s) {
   renderPayments();
   renderPolicy();
   renderLog();
+  if (before && !$('top-actions').hidden) momentsFor(before, s);
+}
+
+// ---------------------------------------------------------------- moments: what Sam sees the instant something happens
+function momentsFor(a, b) {
+  for (const ap of b.approvals) {
+    if (ap.status !== 'PENDING' || a.approvals.some((x) => x.id === ap.id)) continue;
+    const f = ap.evidence.flights.at(-1);
+    moment({
+      tone: 'warn', icon: 'bang', title: 'Decision required',
+      sub: `${first()} needs ${ap.kind === 'nights' ? `night ${ap.to.nights} in ${ap.to.city}` : `extra cover in ${ap.to.city}`}. ${ap.why}.`,
+      amount: `+${money(ap.delta, ap.to.currency)}`, amountNote: `Updated coverage ${money(ap.to.limit, ap.to.currency)}`,
+      rows: f ? [['plane', `${f.id} ${f.from} → ${f.to}`, f.status.charAt(0).toUpperCase() + f.status.slice(1).toLowerCase()]] : [],
+      primary: { label: 'Review request', run: () => { openApproval = ap.id; renderApproval(); go('approval'); } },
+      secondary: { label: 'Later' },
+    });
+  }
+
+  const was = (id) => (a.payments || []).find((l) => l.id === id);
+  const sent = (b.payments || []).filter((l) => l.status === 'SENT' && was(l.id)?.status !== 'SENT');
+  if (sent.length) {
+    const toAda = sent.filter((l) => l.role === 'traveller');
+    const toHotel = sent.filter((l) => l.role === 'hotel');
+    const parts = [];
+    if (toAda.length) parts.push(`${money(sum(toAda), toAda[0].currency)} to ${first()}`);
+    if (toHotel.length) parts.push(`${money(sum(toHotel), toHotel[0].currency)} to ${toHotel[0].payeeName.replace(/\s+GmbH$/, '')}`);
+    toast(`Paid ${parts.join(' and ')}.`);
+  }
+
+  for (const m of b.inbox || []) {
+    const old = (a.inbox || []).find((x) => x.id === m.id);
+    if (m.verdict === 'suspicious' && old?.verdict !== 'suspicious') toast(`Detour caught a fake airline message sent to ${first()}. Nothing was paid.`);
+  }
+
+  if (b.summary && !a.summary) {
+    const sm = b.summary;
+    moment({
+      tone: 'ok', icon: 'check', title: 'Trip closed', sub: `${first()} is on the way. No expense claim to check.`,
+      rows: sm.mode === 'transfer'
+        ? [['users', `Sent to ${first()}`, money(sm.toTraveller, sm.currency)], ['bed', 'Paid to the hotel', money(sm.toHotel, sm.currency)], ['refresh', 'Cancelled, never paid', money(sm.cancelled, sm.currency)]]
+        : [['card', 'Spent on the card', money(sm.spent, sm.currency)]],
+      primary: { label: 'See payments', go: 'payments' }, secondary: { label: 'Close' },
+    });
+  }
 }
 
 function approvalTitle(a) {
@@ -221,9 +266,18 @@ function renderApproval() {
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-decide]');
   if (!b) return;
+  const approve = b.dataset.decide === 'approve';
+  const ap = S.approvals.find((x) => x.id === openApproval);
   b.closest('.btn-row').querySelectorAll('button').forEach((x) => { x.disabled = true; });
+  b.classList.add('busy');
+  b.innerHTML = `<span class="spin"></span>${approve ? 'Approving' : 'Declining'}`;
   const j = await api('/api/decide', { id: openApproval, decision: b.dataset.decide });
-  if (j.ok) toast(b.dataset.decide === 'approve' ? `Approved. ${first()} has been told.` : `Declined. ${first()} has been told.`);
+  if (!j.ok || !ap) { renderApproval(); return; }
+  const what = ap.kind === 'nights' ? `Night ${ap.to.nights} in ${ap.to.city}` : approvalTitle(ap);
+  moment(approve
+    ? { tone: 'ok', icon: 'check', title: 'Request approved', sub: `${first()} has been told.${ap.kind === 'nights' ? ' The hotel is paid directly.' : ''}`, amount: `+${money(ap.delta, ap.to.currency)}`, amountNote: what,
+        rows: [['shield-o', 'Updated coverage', money(ap.to.limit, ap.to.currency)], ['clock', 'Covered until', dayHm(ap.to.activeTo, S.tz)]], primary: { label: 'Done', go: 'home' } }
+    : { tone: 'info', icon: 'x', title: 'Request declined', sub: `${first()} has been told. Detour keeps the cover inside your policy.`, amountNote: what, primary: { label: 'Done', go: 'home' } });
 });
 
 // ---------------------------------------------------------------- trips

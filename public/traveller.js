@@ -127,6 +127,7 @@ function flightCard(ls) {
 
 // ---------------------------------------------------------------- render
 function render(s) {
+  const before = S;
   S = s;
   if (!INV) return;
   if (INV.live && s.account) {
@@ -140,6 +141,116 @@ function render(s) {
   renderChat();
   renderMore();
   renderSheetInbox();
+  if (before && live() && !$('top-actions').hidden) momentsFor(before, s);
+}
+
+// ---------------------------------------------------------------- moments: what Ada sees the instant something happens
+function momentsFor(a, b) {
+  const tz = b.tz;
+  const was = (id) => (a.payments || []).find((l) => l.id === id);
+  const pays = b.payments || [];
+  const d = b.disruption;
+  const rates = d ? b.policy.cities[d.airport] : null;
+  const whole = (n, c) => money(n, c, { maximumFractionDigits: 0 });
+
+  // A disruption is detected
+  if (d && !d.closed && (!a.disruption || a.disruption.seq !== d.seq)) {
+    const title = /cancelled/.test(d.reason) ? 'Your flight is cancelled' : /arrives too late/.test(d.reason) ? 'You will miss your connection' : 'Your flight is delayed';
+    moment({
+      tone: 'warn', icon: 'warn', title,
+      sub: `Detour is on it. You're covered in ${city(d.airport)}, inside ${companyName(b)}'s policy.`,
+      rows: rates ? [
+        ['meal', 'Meals, sent to your account', `${whole(rates.meals_per_day, rates.currency)} / day`],
+        ['car', 'Taxis and transport', whole(rates.transport, rates.currency)],
+        ['bed', 'Hotel, paid directly if you stay', `${whole(rates.lodging_per_night * b.policy.rules.lodging_factor, rates.currency)} / night`],
+      ] : [],
+      primary: { label: "See what's covered", go: 'home' },
+    });
+  }
+
+  // Money reaches the traveller's account
+  const sentToMe = pays.filter((l) => l.role === 'traveller' && l.status === 'SENT' && was(l.id)?.status !== 'SENT');
+  if (sentToMe.length) {
+    const rec = sentToMe.filter((l) => l.received);
+    const home = rec[0]?.received.currency;
+    const last4 = INV.registration?.bank.last4;
+    moment({
+      tone: 'ok', icon: 'check', title: 'Money received',
+      amount: home ? money(sum(rec, (l) => l.received.amount), home) : money(sum(sentToMe), sentToMe[0].currency),
+      amountNote: last4 ? `In your account ending ${last4}` : 'In your bank account',
+      rows: sentToMe.map((l) => [/meals/.test(l.what) ? 'meal' : /Taxi/.test(l.what) ? 'car' : 'wallet', l.what, money(l.amount, l.currency)]),
+      ref: `Paid through Airwallex · ${dateHm(b.clock, tz)}`,
+      primary: { label: 'Done' },
+    });
+  }
+
+  // The hotel is paid directly
+  const hotel = pays.filter((l) => l.role === 'hotel' && l.status === 'SENT' && was(l.id)?.status !== 'SENT');
+  if (hotel.length) {
+    moment({
+      tone: 'ok', icon: 'bed', title: 'Your hotel is paid',
+      sub: `${hotel[0].payeeName.replace(/\s+GmbH$/, '')} has been paid by ${companyName(b)}. Just give your name at the desk.`,
+      amount: money(sum(hotel), hotel[0].currency), amountNote: hotel.map((l) => l.what).join(' · '),
+      primary: { label: 'Done' },
+    });
+  }
+
+  // Payments no longer needed are cancelled before they are paid
+  const cancelled = pays.filter((l) => l.status === 'CANCELLED' && was(l.id) && was(l.id).status !== 'CANCELLED');
+  if (cancelled.length) {
+    moment({
+      tone: 'info', icon: 'refresh', title: 'Not needed, cancelled',
+      sub: 'Your plans changed, so these were cancelled before they were paid. Nothing to give back.',
+      rows: cancelled.map((l) => [l.role === 'hotel' ? 'bed' : 'wallet', l.what, money(l.amount, l.currency)]),
+      primary: { label: 'Done' },
+    });
+  }
+
+  // A request goes to the travel manager, and the decision comes back
+  for (const ap of b.approvals) {
+    const old = a.approvals.find((x) => x.id === ap.id);
+    const what = ap.kind === 'nights' ? `Night ${ap.to.nights} in ${ap.to.city}` : `Extra cover in ${ap.to.city}`;
+    if (!old && ap.status === 'PENDING') {
+      moment({ tone: 'info', icon: 'clock', title: `Asked ${b.manager.split(' ')[0]} for you`, sub: `${what} needs your travel manager's approval. We'll tell you the moment they decide.`, progress: true, primary: { label: 'OK' } });
+    } else if (old?.status === 'PENDING' && ap.status === 'APPROVED') {
+      moment({ tone: 'ok', icon: 'check', title: `${what} approved`, sub: `${b.manager} approved it.${ap.kind === 'nights' ? ' Your hotel is paid directly for another night.' : ''}`, amount: `+${money(ap.delta, ap.to.currency)}`, amountNote: `Covered until ${dayHm(ap.to.activeTo, tz)}`, primary: { label: 'Done' } });
+    } else if (old?.status === 'PENDING' && ap.status === 'DECLINED') {
+      moment({ tone: 'bad', icon: 'x', title: `${what} declined`, sub: `${b.manager} declined this one. Message Detour if your plans change.`, primary: { label: 'Message Detour', go: 'messages' }, secondary: { label: 'Close' } });
+    }
+  }
+
+  // A fake airline message is caught
+  for (const m of b.inbox || []) {
+    const old = (a.inbox || []).find((x) => x.id === m.id);
+    if (m.verdict === 'suspicious' && old?.verdict !== 'suspicious') {
+      moment({ tone: 'bad', icon: 'shield-o', title: 'This looks like a scam', sub: `"${m.subject}" asks for money or details and does not match your flight status. Nothing was changed. Don't reply to it.`, primary: { label: 'OK' } });
+    } else if (m.verdict === 'confirmed' && old?.verdict !== 'confirmed') {
+      toast('Airline message read. It matches your flight status.');
+    }
+  }
+
+  // The trip is resolved
+  if (b.summary && !a.summary) {
+    const sm = b.summary;
+    moment({
+      tone: 'ok', icon: 'check', title: 'Trip resolved', sub: 'Have a good flight. Nothing to claim and no receipts to keep.',
+      rows: sm.mode === 'transfer'
+        ? [['wallet', 'Sent to you', money(sm.toTraveller, sm.currency)], ['bed', 'Hotel, paid directly', money(sm.toHotel, sm.currency)], ['refresh', 'Cancelled, never paid', money(sm.cancelled, sm.currency)]]
+        : [['card', 'Spent on your card', money(sm.spent, sm.currency)]],
+      primary: { label: 'Back to home', go: 'home' },
+    });
+  }
+}
+
+// Disruption progress on Home: detected, support, payment, resolved
+function stepperHtml() {
+  const d = live() ? S?.disruption : null;
+  if (!d && !S?.summary) return '';
+  const paid = toTraveller().some((l) => l.status === 'SENT');
+  const done = [Boolean(d), Boolean(S.card), paid, Boolean(S.summary || d?.closed)];
+  const now = done.indexOf(false);
+  const steps = [['plane', 'Disruption detected'], ['shield-o', 'Support provided'], ['card', 'Payment sent'], ['home', 'Trip resolved']];
+  return `<ol class="card stepper">${steps.map(([ic, label], i) => `<li class="${done[i] ? 'done' : i === now ? 'now' : ''}"><span class="dot">${icon(done[i] ? 'check' : ic)}</span><b>${label}</b></li>`).join('')}</ol>`;
 }
 
 const toTraveller = () => (S?.payments || []).filter((l) => l.role === 'traveller');
@@ -164,7 +275,8 @@ function statusBanner() {
 function renderHome() {
   const ls = legs();
   $('h-who').innerHTML = whoHtml();
-  $('h-status').innerHTML = statusBanner();
+  const steps = stepperHtml();
+  $('h-status').innerHTML = statusBanner() + (steps ? `<div style="margin-top:12px">${steps}</div>` : '');
   $('h-flight').innerHTML = flightCard(ls);
 
   const rows = [];
