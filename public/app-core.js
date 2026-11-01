@@ -101,8 +101,7 @@ const ICONS = {
   sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
 };
 document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3ecf4"/><stop offset="1" stop-color="#8fa8c1"/></linearGradient>
-  <symbol id="logo" viewBox="0 0 32 35"><path fill="url(#logo-grad)" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="#04111b" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></symbol>
+  <symbol id="logo" viewBox="0 0 32 35"><path fill="#fff" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="#04111b" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></symbol>
   ${Object.entries(ICONS).map(([k, d]) => `<symbol id="i-${k}" viewBox="0 0 24 24"><path d="${d}"/></symbol>`).join('')}
 </defs></svg>`);
 const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
