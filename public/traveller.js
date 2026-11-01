@@ -1,197 +1,429 @@
-// Detour traveller app: what the stranded traveller sees on their phone.
-// Shared helpers come from mobile.js.
-let S = null;
-let screen = params.get('tab') === 'messages' ? 'messages' : 'trip';
+// Detour traveller app: sign in with the invited email, finish registering, then the trip,
+// messages and what is covered. Shared helpers come from app-core.js.
+let S = null;        // live state from the server
+let INV = null;      // this traveller's invite (trip, company, registration)
+let seenDetour = 0;  // Detour messages already seen, for the unread count
+let lastChatCount = -1;
+const KEY = 'detour.traveller';
 try { localStorage.setItem('detour.role', 'traveller'); } catch {}
-let seen = 0;
-let lastCount = 0;
 
-function render(s) {
-  S = s;
-  const tz = s.tz;
-  renderHero(s, tz);
-  renderFlight(s, tz);
-  renderHotel(s);
-  renderMoney(s, tz);
-  renderInbox(s, tz);
-  renderChat(s, tz);
-  $('tv-fine').textContent = 'Demo: scripted flight feed and fictional test data. Payments run in the Airwallex sandbox.';
-  const fromDetour = s.messages.filter((m) => m.from === 'detour').length;
-  if (screen === 'messages') seen = fromDetour;
-  $('tv-badge').textContent = fromDetour > seen ? fromDetour - seen : '';
-  DetourDock.update(s);
+const session = {
+  get() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } },
+  set(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} },
+  clear() { try { localStorage.removeItem(KEY); } catch {} },
+};
+const live = () => Boolean(INV?.live);
+const firstName = () => (INV?.registration?.name || INV?.name || '').split(' ')[0];
+
+// ---------------------------------------------------------------- start
+async function start() {
+  if (EMBED) return enter(await find({ token: 'ada-demo' }), { skipOnboarding: true });
+  const token = params.get('invite');
+  if (token) {
+    history.replaceState(null, '', '/traveller');
+    const inv = await find({ token });
+    if (inv) return enter(inv);
+    return go('signin', { replace: true });
+  }
+  const saved = session.get();
+  if (saved?.token) {
+    const inv = await find({ token: saved.token }, true);
+    if (inv) return enter(inv);
+    session.clear();
+  }
+  go('signin', { replace: true });
 }
 
-const toTraveller = (s) => (s.payments || []).filter((l) => l.role === 'traveller');
-const hotelRows = (s) => (s.payments || []).filter((l) => l.role === 'hotel');
-
-function renderHero(s, tz) {
-  const el = $('tv-hero');
-  const c = s.card;
-  const dest = CITY[s.legs.at(-1)?.to] || s.legs.at(-1)?.to;
-  if (s.summary) {
-    el.className = 'tv-hero calm';
-    const sm = s.summary;
-    el.innerHTML = sm.mode === 'transfer'
-      ? `<div class="eyebrow">Trip complete</div><h1>Welcome to ${esc(dest)}</h1><p>Detour sent you ${money(sm.toTraveller, sm.currency)} and paid your hotel directly. Nothing to claim, no receipts.</p>`
-      : `<div class="eyebrow">Trip complete</div><h1>Welcome to ${esc(dest)}</h1><p>Your Detour card is closed. You spent ${money(sm.spent, sm.currency)}. Nothing to claim, no receipts.</p>`;
-    return;
-  }
-  if (!c) {
-    el.className = 'tv-hero calm';
-    el.innerHTML = `<div class="eyebrow">Trip to ${esc(dest)}</div><h1>Your trip is on track</h1><p>Detour is watching your flights. If one is cancelled or badly delayed, money for meals, taxis and a hotel reaches you automatically.</p>`;
-    return;
-  }
-  if (c.status !== 'ACTIVE') {
-    el.className = 'tv-hero calm';
-    el.innerHTML = `<div class="eyebrow">On your way</div><h1>Have a good flight</h1><p>Your Detour cover has ended. Anything you didn't need was cancelled before it was paid.</p>`;
-    return;
-  }
-  const k = c.controls;
-  const hotel = k.categories.includes('lodging');
-  el.className = 'tv-hero covered';
-  let big = '';
-  if (s.mode === 'transfer') {
-    const sent = toTraveller(s).filter((l) => l.status === 'SENT');
-    const rec = sent.filter((l) => l.received);
-    const cur = rec[0]?.received.currency || k.currency;
-    big = `<div class="big">${money(sum(rec, (l) => l.received.amount), cur)}<small>in your account</small></div>`;
-  } else {
-    big = `<div class="big">${money(c.remaining, k.currency)}<small>left on your card</small></div>`;
-  }
-  el.innerHTML = `<div class="eyebrow">Disrupted · ${esc(k.city)}</div><h1>You're covered in ${esc(k.city)}</h1>
-    <p>Meals and taxis${hotel ? ', and your hotel is paid' : ''}. Until ${esc(dayHm(k.activeTo, tz))}.</p>${big}`;
+async function find(q, quiet = false) {
+  const j = await api('/api/traveller/find', q, { quiet: true });
+  if (!j.ok) { if (!quiet && q.email) $('signin-error').textContent = j.error; return null; }
+  return j.result;
 }
 
+function enter(inv, { skipOnboarding = false } = {}) {
+  if (!inv) return go('signin', { replace: true });
+  INV = inv;
+  if (inv.expired) {
+    $('x-lede').textContent = `Ask ${inv.manager || 'your travel manager'} to send a new one.`;
+    return go('expired', { replace: true });
+  }
+  if (inv.registration || skipOnboarding) {
+    session.set({ token: inv.token, email: inv.email });
+    showMain();
+    return;
+  }
+  renderWelcome();
+  go('welcome', { replace: true });
+}
+
+function showMain() {
+  $('top-actions').hidden = false;
+  go('home', { replace: true });
+  if (S) render(S);
+}
+
+// ---------------------------------------------------------------- sign in
+$('signin-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const email = $('signin-email').value.trim();
+  $('signin-error').textContent = '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('signin-error').textContent = 'Enter the email address your invite was sent to.'; return; }
+  const btn = e.target.querySelector('button');
+  btn.disabled = true;
+  const inv = await find({ email });
+  btn.disabled = false;
+  if (inv) enter(inv);
+};
+$('x-again').onclick = () => { session.clear(); go('signin', { replace: true }); };
+
+// ---------------------------------------------------------------- trip model (live trip or invited trip)
+function legs() {
+  if (live() && S) return S.legs.map((f) => ({ ...f, dep: f.est_dep, arr: f.est_arr }));
+  return (INV?.flights || []).map((f) => ({ id: f.id, from: f.from, to: f.to, dep: Date.parse(f.dep), arr: f.arr ? Date.parse(f.arr) : null, status: 'SCHEDULED', statusText: 'on time' }));
+}
+const tzOf = (code) => AIRPORTS[code]?.[3] || 'UTC';
+const routeCodes = (ls) => (ls.length ? [ls[0].from, ...ls.map((l) => l.to)] : []);
+function nextLeg(ls) { return ls.find((l) => l.status !== 'LANDED' && l.status !== 'DEPARTED') || ls.at(-1); }
+function legState(l) {
+  if (l.status === 'LANDED' || l.status === 'DEPARTED') return 'done';
+  const d = live() && S?.disruption;
+  if (l.status === 'CANCELLED' || (d && d.missedFlight === l.id)) return 'broken';
+  if (d && !INV.flights.some((f) => f.id === l.id)) return 'new';
+  return 'next';
+}
 function flightPill(f) {
   if (f.status === 'CANCELLED') return '<span class="pill bad">Cancelled</span>';
   if (f.status === 'LANDED') return '<span class="pill plain">Landed</span>';
   if (f.status === 'DEPARTED') return '<span class="pill info">In the air</span>';
-  if (/late/.test(f.statusText)) return `<span class="pill warn">${esc(f.statusText.replace('running ', ''))}</span>`;
-  return '<span class="pill ok">On time</span>';
-}
-function renderFlight(s, tz) {
-  const f = s.legs.find((l) => l.status !== 'LANDED') || s.legs.at(-1);
-  $('tv-flight').innerHTML = `
-    <div class="tv-card-head"><h2>${f.status === 'LANDED' ? 'Last flight' : 'Next flight'}</h2><span>${esc(f.id)}</span></div>
-    <div class="tv-flight"><div class="ap">${esc(f.from)}<span>${esc(CITY[f.from] || f.from)}</span></div><div class="mid">→</div><div class="ap to">${esc(f.to)}<span>${esc(CITY[f.to] || f.to)}</span></div></div>
-    <div class="tv-flight-foot"><span>Departs ${esc(dayHm(f.est_dep, tz))} local</span>${flightPill(f)}</div>`;
+  if (live() && S?.disruption?.missedFlight === f.id && !S.disruption.closed) return '<span class="pill bad">Missed</span>';
+  if (/late/.test(f.statusText || '')) return `<span class="pill warn">${esc(f.statusText.replace('running ', '').replace(/^./, (c) => c.toUpperCase()))}</span>`;
+  return '<span class="pill ok"><i class="live"></i>On time</span>';
 }
 
-function renderHotel(s) {
-  const rows = hotelRows(s).filter((l) => l.status !== 'CANCELLED');
-  const card = $('tv-hotel');
-  if (s.mode !== 'transfer' || !rows.length || s.summary) { card.hidden = true; return; }
-  card.hidden = false;
-  const name = rows[0].payeeName.replace(/\s+GmbH$/, '');
-  card.innerHTML = `<div class="tv-card-head"><h2>Hotel</h2><span>${rows.length} night${rows.length === 1 ? '' : 's'}</span></div>
-    <div class="tv-hotel"><b>${esc(name)}</b><p>Paid directly by ${esc(company(S))}. Just give your name at the desk; there is nothing to pay and nothing to claim.</p>
-    <span class="pill ok tag">Room paid</span></div>`;
+function avatarHtml(size = '') {
+  return live() ? `<span class="avatar photo ${size}"><img src="/img/app/ada.jpg" alt=""></span>` : `<span class="avatar ${size}">${esc(initials(INV?.name || '?'))}</span>`;
+}
+function whoHtml() {
+  return `${avatarHtml('lg')}<div><b>${esc(INV.registration?.name || INV.name)}<span class="tag">Traveller</span></b><small>${esc(INV.company || companyName(S || {}))}</small></div>`;
 }
 
-function renderMoney(s, tz) {
-  const el = $('tv-money');
-  if (s.mode !== 'transfer') {
-    const c = s.card;
-    el.innerHTML = c
-      ? `<div class="tv-card-head"><h2>Your Detour card</h2><span>•••• ${esc(c.last4 || '')}</span></div>
-        <div class="tv-row"><div class="l"><b>Left to spend</b><span>${esc(c.categoryLabels.join(', '))}</span></div><div class="r"><b>${money(c.remaining, c.controls.currency)}</b><span>of ${money(c.controls.limit, c.controls.currency)}</span></div></div>`
-      : '<div class="tv-card-head"><h2>Money</h2><span>Nothing needed yet</span></div><div class="tv-row"><div class="l"><span>A card appears here the moment your trip is disrupted.</span></div></div>';
+function flightCard(ls) {
+  if (!ls.length) return '';
+  const f = nextLeg(ls);
+  const codes = routeCodes(ls);
+  const link = (i) => {
+    const st = legState(ls[i]);
+    return `<span class="link ${st === 'broken' ? 'broken' : ''}">${icon('plane')}</span>`;
+  };
+  const aps = codes.map((c, i) => `<div class="ap ${i === 0 ? '' : i === codes.length - 1 ? 'r' : 'c'}"><b>${esc(c)}</b><small>${esc(city(c))}</small></div>`);
+  const route = aps.flatMap((ap, i) => (i < aps.length - 1 ? [ap, link(i)] : [ap])).join('');
+  const tz = tzOf(f.from);
+  return `<div class="card pad">
+    <div class="flight-head">${icon('plane')}<b>${esc(f.id)}</b>${flightPill(f)}</div>
+    <div class="route">${route}</div>
+    <div class="meta"><span>${icon('calendar')}${esc(dayDate(f.dep, tz))}</span><span>${icon('clock')}${esc(hm(f.dep, tz))} ${esc(city(f.from))} time</span></div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------- render
+function render(s) {
+  S = s;
+  if (!INV) return;
+  if (INV.live && s.account) {
+    const mine = s.account.invites.find((i) => i.token === INV.token);
+    if (!mine && !EMBED) { session.clear(); INV = null; $('top-actions').hidden = true; go('signin', { replace: true }); return; }
+  }
+  $('top-avatar').innerHTML = live() ? '<img src="/img/app/ada.jpg" alt="">' : esc(initials(INV.name));
+  $('top-avatar').classList.toggle('photo', live());
+  renderHome();
+  renderTrips();
+  renderChat();
+  renderMore();
+  renderSheetInbox();
+}
+
+const toTraveller = () => (S?.payments || []).filter((l) => l.role === 'traveller');
+const hotelPays = () => (S?.payments || []).filter((l) => l.role === 'hotel');
+
+function statusBanner() {
+  if (!live() || !S) return `<div class="banner ok"><span class="badge">${icon('check')}</span><div class="grow"><b>Your trip is on track</b><small>Detour watches your flights and steps in if one is disrupted.</small></div></div>`;
+  const d = S.disruption;
+  if (S.summary) {
+    const sm = S.summary;
+    const sent = sm.mode === 'transfer' ? `Detour sent you ${money(sm.toTraveller, sm.currency)} and paid your hotel.` : `You spent ${money(sm.spent, sm.currency)} on your Detour card.`;
+    return `<div class="banner ok"><span class="badge">${icon('check')}</span><div class="grow"><b>Trip resolved</b><small>${esc(sent)} Nothing to claim, no receipts.</small></div></div>`;
+  }
+  if (d && !d.closed) {
+    const title = /cancelled/.test(d.reason) ? 'Flight cancelled' : /arrives too late/.test(d.reason) ? 'Connection missed' : 'Flight delayed';
+    return `<button class="banner bad" data-go="trips"><span class="badge">${icon('warn')}</span><div class="grow"><b>${title}</b><small>Detour is on it. You're covered in ${esc(city(d.airport))}.</small></div><time>${esc(ago(d.start, S.clock))}</time></button>`;
+  }
+  if (d && d.closed) return `<div class="banner info"><span class="badge">${icon('plane')}</span><div class="grow"><b>Have a good flight</b><small>Your cover has ended. Anything you didn't need was cancelled before it was paid.</small></div></div>`;
+  return `<div class="banner ok"><span class="badge">${icon('check')}</span><div class="grow"><b>Your trip is on track</b><small>Detour watches your flights and steps in if one is disrupted.</small></div></div>`;
+}
+
+function renderHome() {
+  const ls = legs();
+  $('h-who').innerHTML = whoHtml();
+  $('h-status').innerHTML = statusBanner();
+  $('h-flight').innerHTML = flightCard(ls);
+
+  const rows = [];
+  const c = live() ? S?.card : null;
+  const d = live() ? S?.disruption : null;
+  if (c && c.status === 'ACTIVE') {
+    rows.push(`<button class="row tap" data-go="trips"><span class="ic green">${icon('shield')}</span><div class="grow"><b>Coverage active</b><small>In ${esc(c.controls.city)} until ${esc(dayHm(c.controls.activeTo, S.tz))}</small></div>${icon('chev-r', 'chev')}</button>`);
+  } else if (!S?.summary) {
+    rows.push(`<div class="row"><span class="ic green">${icon('shield')}</span><div class="grow"><b>Coverage ready</b><small>Starts the moment a flight on your trip is disrupted</small></div></div>`);
+  }
+  if (live() && S?.mode === 'transfer') {
+    const mine = toTraveller();
+    const sent = mine.filter((l) => l.status === 'SENT');
+    const rec = sent.filter((l) => l.received);
+    const sched = mine.filter((l) => l.status === 'SCHEDULED');
+    if (mine.length) {
+      const cur = rec[0]?.received.currency || INV.registration?.homeCurrency || 'SGD';
+      const more = sched.length ? ` · ${money(sum(sched), sched[0].currency)} more scheduled` : '';
+      rows.push(`<button class="row tap" data-go="trips"><span class="ic">${icon('wallet')}</span><div class="grow"><b>${money(sum(rec, (l) => l.received.amount), cur)}</b><small>Received in your account${esc(more)}</small></div>${icon('chev-r', 'chev')}</button>`);
+    }
+  } else if (c) {
+    rows.push(`<div class="row"><span class="ic">${icon('card')}</span><div class="grow"><b>${money(c.remaining, c.controls.currency)}</b><small>Left on your Detour card</small></div></div>`);
+  }
+  const hotel = hotelPays().filter((l) => l.status !== 'CANCELLED');
+  if (live() && hotel.length && !S.summary) {
+    const name = hotel[0].payeeName.replace(/\s+GmbH$/, '');
+    rows.push(`<button class="row tap" data-go="trips"><img class="thumb" src="/img/app/hotel.jpg" alt=""><div class="grow"><b>Hotel accommodation</b><small>${esc(name)} · ${hotel.length} night${hotel.length > 1 ? 's' : ''} paid</small></div>${icon('chev-r', 'chev')}</button>`);
+  }
+  $('h-rows').innerHTML = rows.map((r) => `<div class="card">${r}</div>`).join('');
+
+  // What's covered, while the disruption is open
+  if (c && c.status === 'ACTIVE' && d && !d.closed && S.mode === 'transfer') {
+    const rates = S.policy.cities[d.airport];
+    const cur = c.controls.currency;
+    const pays = S.payments || [];
+    const mealRows = pays.filter((l) => /meals/.test(l.what));
+    const meals = mealRows.filter((l) => l.status === 'SENT').length;
+    const nights = hotelPays().filter((l) => l.status !== 'CANCELLED').length;
+    const perNight = Math.round(rates.lodging_per_night * S.policy.rules.lodging_factor * 100) / 100;
+    $('h-covered').innerHTML = `<div class="section-head"><h2>What's covered in ${esc(city(d.airport))}</h2></div>
+      <div class="card">
+        <div class="row"><span class="ic">${icon('meal')}</span><div class="grow"><b>Meals</b><small>${meals ? `${meals} day${meals > 1 ? 's' : ''} sent to your account` : 'Sent to your account each morning'}</small></div><div class="end"><b>${money(rates.meals_per_day, cur)}</b><small>per day</small></div></div>
+        <div class="row"><span class="ic">${icon('car')}</span><div class="grow"><b>Taxis and transport</b><small>Sent to your account</small></div><div class="end"><b>${money(rates.transport, cur)}</b><small>per stay</small></div></div>
+        <div class="row"><span class="ic">${icon('bed')}</span><div class="grow"><b>Hotel</b><small>${nights ? `Paid directly · ${nights} night${nights > 1 ? 's' : ''}` : 'Added if you need to stay the night'}</small></div><div class="end"><b>${money(perNight, cur)}</b><small>per night</small></div></div>
+      </div>`;
+  } else {
+    $('h-covered').innerHTML = '';
+  }
+  $('h-share').hidden = !live();
+  $('h-fine').textContent = live() ? 'Demo trip: scripted flight feed and fictional people. Payments run in the Airwallex sandbox.' : '';
+}
+
+function renderTrips() {
+  const ls = legs();
+  if (!ls.length) return;
+  const codes = routeCodes(ls);
+  $('t-sub').textContent = `${codes.join(' → ')} · ${dayDate(ls[0].dep, tzOf(ls[0].from))}`;
+  if (currentView === 'trips') drawTripMap();
+  $('t-legs').innerHTML = ls.map((f) => `<div class="row"><span class="ic plain">${icon('plane')}</span><div class="grow"><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>Departs ${esc(dateHm(f.dep, tzOf(f.from)))} ${esc(city(f.from))} time</small></div>${flightPill(f)}</div>`).join('');
+
+  const c = live() ? S?.card : null;
+  if (c && S.mode === 'transfer') {
+    const pays = S.payments || [];
+    $('t-cover').innerHTML = `<div class="section-head"><h2>Payments for this stay</h2></div><div class="card">${pays.slice().reverse().map((l) => {
+      const when = l.status === 'SENT' ? `Sent ${dayHm(l.payAt, S.tz)}` : l.status === 'SCHEDULED' ? `Due ${dayHm(l.payAt, S.tz)}` : 'Not needed';
+      const pill = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill warn">Scheduled</span>', CANCELLED: '<span class="pill plain">Cancelled</span>' }[l.status] || '';
+      const amt = l.role === 'traveller' && l.received && l.received.currency !== l.currency ? money(l.received.amount, l.received.currency) : money(l.amount, l.currency);
+      return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}"><span class="ic ${l.role === 'hotel' ? 'purple' : ''}">${icon(l.role === 'hotel' ? 'bed' : /meals/.test(l.what) ? 'meal' : /Taxi/.test(l.what) ? 'car' : 'wallet')}</span><div class="grow"><b>${esc(l.what)}</b><small>${l.role === 'hotel' ? 'Paid to the hotel' : 'To your account'} · ${esc(when)}</small></div><div class="end"><b>${esc(amt)}</b>${pill}</div></div>`;
+    }).join('') || '<div class="empty">No payments yet.</div>'}</div>`;
+  } else {
+    $('t-cover').innerHTML = '';
+  }
+
+  const inbox = live() ? (S?.inbox || []).slice().reverse() : [];
+  const lock = S?.busy || S?.playing;
+  $('t-inbox').innerHTML = inbox.length ? inbox.map((m) => `<div class="row"><span class="ic plain">${icon('mail')}</span><div class="grow"><b>${esc(m.subject)}</b><small>${esc(m.from.replace(/\s*<.*>/, ''))} · ${esc(dayHm(m.at, S.tz))}</small></div>${verdictPill(m) || `<button class="btn ghost" style="height:34px;padding:0 14px;font-size:13.5px" data-forward="${esc(m.id)}" ${lock ? 'disabled' : ''}>Share</button>`}</div>`).join('')
+    : '<div class="empty">Airline emails show here. Only the ones you share are read by Detour.</div>';
+}
+function verdictPill(m) {
+  if (!m.shared) return '';
+  return { suspicious: '<span class="pill bad">Suspicious</span>', confirmed: '<span class="pill ok">Confirmed</span>', unconfirmed: '<span class="pill plain">Not confirmed</span>' }[m.verdict] || '<span class="pill plain">Reading…</span>';
+}
+function drawTripMap() {
+  const ls = legs();
+  const d = live() ? S?.disruption : null;
+  drawRoute($('trip-map'), ls.map((l) => ({ from: l.from, to: l.to, state: legState(l) })), { stay: d && !d.closed ? d.airport : null });
+}
+onView('trips', () => { if (INV) drawTripMap(); });
+
+// ---------------------------------------------------------------- messages
+function renderChat() {
+  const chat = $('chat');
+  if (!live()) {
+    chat.innerHTML = `<div class="empty">Detour will message you here if a flight on your trip is disrupted. You can reply any time.</div>`;
+    $('chat-text').disabled = true;
+    $('chat-text').placeholder = 'Messages open when your trip starts';
     return;
   }
-  const rows = toTraveller(s);
-  if (!rows.length) {
-    el.innerHTML = '<div class="tv-card-head"><h2>Money sent to you</h2><span>Nothing needed yet</span></div><div class="tv-row"><div class="l"><span>If your trip is disrupted, Detour sends money straight to your bank account.</span></div></div>';
-    return;
-  }
-  el.innerHTML = `<div class="tv-card-head"><h2>Money sent to you</h2><span>to your bank account</span></div>` + rows.slice().reverse().map((l) => {
-    const off = l.status === 'CANCELLED';
-    const when = l.status === 'SENT' ? `Sent ${dayHm(l.payAt, tz)}` : l.status === 'SCHEDULED' ? `Arrives ${dayHm(l.payAt, tz)}` : 'Not needed';
-    const rec = l.received && l.received.currency !== l.currency ? money(l.received.amount, l.received.currency) : money(l.amount, l.currency);
-    return `<div class="tv-row ${off ? 'off' : ''}"><div class="l"><b>${esc(l.what)}</b><span>${esc(when)}</span></div><div class="r"><b>${esc(rec)}</b><span>${money(l.amount, l.currency)}</span></div></div>`;
-  }).join('');
-}
-
-function renderChat(s, tz) {
-  const chat = $('tv-chat');
-  const writing = s.activity && /^(Messaging|Replying|Reading .*message)/.test(s.activity);
-  if (!s.messages.length && !writing) {
-    chat.innerHTML = '<div class="chat-empty">Messages from Detour appear here. You can also ask for help, for example if the hotel asks for a deposit.</div>';
+  const tz = S.tz;
+  const writing = S.activity && /^(Messaging|Replying|Reading .*message)/.test(S.activity);
+  $('chat-status').innerHTML = writing ? '<span class="c-cyan">Typing…</span>' : 'Your trip assistant';
+  if (!S.messages.length && !writing) {
+    chat.innerHTML = `<div class="empty">Messages from Detour appear here. Ask anything, for example if the hotel asks you for a deposit.</div>`;
   } else {
     let lastDay = '';
-    chat.innerHTML = s.messages.map((m) => {
+    chat.innerHTML = S.messages.map((m) => {
       const day = fmt(m.at, tz, { weekday: 'long', day: 'numeric', month: 'long' });
-      const sep = day !== lastDay ? `<div class="tv-day">${esc(day)}</div>` : '';
+      const sep = day !== lastDay ? `<div class="day">${esc(day)}</div>` : '';
       lastDay = day;
       if (m.kind === 'share') {
-        const how = { screenshot: 'Shared a screenshot', forwarded: 'Forwarded an airline email', shared: 'Shared an airline message' }[m.how] || 'Shared an airline message';
-        return `${sep}<div class="msg traveller share"><span class="att"><svg viewBox="0 0 24 24"><path d="M20.5 11.5 12 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.7a1.7 1.7 0 0 1-2.4-2.4L15 7.6"/></svg>${how}</span><q>${esc(m.text)}</q><time>${hm(m.at, tz)}</time></div>`;
+        const how = { screenshot: 'Screenshot', forwarded: 'Forwarded email', shared: 'Shared message' }[m.how] || 'Airline message';
+        return `${sep}<div class="msg me"><div class="attach"><span class="doc">${icon('doc')}</span><div class="grow"><b>Airline message</b><small>${esc(how)} · ${esc(m.text)}</small></div><small>${hm(m.at, tz)}</small></div></div>`;
       }
-      return `${sep}<div class="msg ${m.from}">${esc(m.text)}<time>${hm(m.at, tz)}</time></div>`;
+      if (m.from === 'traveller') return `${sep}<div class="msg me"><div class="bubble">${esc(m.text)}<time>${hm(m.at, tz)}</time></div></div>`;
+      return `${sep}<div class="msg them"><svg class="bot"><use href="#logo"/></svg><div class="bubble">${esc(m.text)}<time>${hm(m.at, tz)}</time></div></div>`;
     }).join('') + (writing ? '<div class="typing" aria-label="Detour is writing"><span></span><span></span><span></span></div>' : '');
   }
-  const count = s.messages.length + (writing ? 1 : 0);
-  if (count !== lastCount) chat.scrollTop = chat.scrollHeight;
-  lastCount = count;
-  const lock = s.busy || s.playing;
-  $('tv-text').disabled = lock;
-  $('tv-form').querySelector('button').disabled = lock;
-  $('tv-text').placeholder = lock ? 'Detour is working…' : 'Message Detour';
+  const count = S.messages.length + (writing ? 1 : 0);
+  if (count !== lastChatCount) chat.scrollTop = chat.scrollHeight;
+  lastChatCount = count;
+
+  const fromDetour = S.messages.filter((m) => m.from === 'detour').length;
+  if (currentView === 'messages') seenDetour = fromDetour;
+  const unread = Math.max(0, fromDetour - seenDetour);
+  $('msg-count').hidden = !unread;
+  $('msg-count').textContent = unread;
+  $('bell-dot').hidden = !unread;
+
+  const lock = S.busy || S.playing;
+  $('chat-text').disabled = lock;
+  $('composer').querySelector('.send').disabled = lock;
+  $('chat-clip').disabled = lock;
+  $('chat-text').placeholder = lock ? 'Detour is working…' : 'Type a message…';
 }
-
-
-$('tv-form').onsubmit = async (e) => {
+onView('messages', () => { if (S && INV) { seenDetour = S.messages.filter((m) => m.from === 'detour').length; renderChat(); $('chat').scrollTop = $('chat').scrollHeight; } });
+$('composer').onsubmit = async (e) => {
   e.preventDefault();
-  const text = $('tv-text').value.trim();
-  if (!text || S?.busy || S?.playing) return;
-  $('tv-text').value = '';
+  const text = $('chat-text').value.trim();
+  if (!text || !live() || S?.busy || S?.playing) return;
+  $('chat-text').value = '';
   await api('/api/chat', { text });
 };
 
-// ---------------------------------------------------------------- airline messages
-function renderInbox(s, tz) {
-  const items = (s.inbox || []).slice().reverse();
-  const lock = s.busy || s.playing;
-  $('tv-inbox').innerHTML = `<div class="tv-card-head"><h2>Airline messages</h2><span>${items.length ? 'only what you share is read' : ''}</span></div>`
-    + (items.length ? items.map((m) => `
-      <div class="tv-inbox-item"><div class="l"><b>${esc(m.subject)}</b><span>${esc(m.from.replace(/\s*<.*>/, ''))} · ${esc(dayHm(m.at, tz))}</span></div>
-        ${m.shared ? ({ suspicious: '<span class="pill bad">Suspicious</span>', confirmed: '<span class="pill ok">Confirmed</span>', unconfirmed: '<span class="pill plain">Not confirmed</span>' }[m.verdict] || '<span class="pill plain">Reading…</span>') : `<button class="btn" data-share-inbox="${esc(m.id)}" ${lock ? 'disabled' : ''}>Share</button>`}</div>`).join('')
-      : '<div class="tv-inbox-item"><div class="l"><span>Messages from your airline appear here. Share one with Detour if it is about a delay or cancellation.</span></div></div>')
-    + `<button class="tv-share-any" id="share-any" ${lock ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/></svg>Share a message or screenshot</button>`;
+// ---------------------------------------------------------------- more
+function renderMore() {
+  $('m-who').innerHTML = whoHtml();
+  const r = INV.registration;
+  if (!r) {
+    $('m-details').innerHTML = `<div class="row"><span class="ic plain">${icon('mail')}</span><div class="grow"><small style="margin:0 0 2px">Email</small><b>${esc(INV.email)}</b></div></div>
+      <button class="row tap" data-go="reg1"><span class="ic orange">${icon('bank')}</span><div class="grow"><b>Finish registration</b><small>Add your phone and the bank account for allowances</small></div>${icon('chev-r', 'chev')}</button>
+      <div class="row"><span class="ic plain">${icon('briefcase')}</span><div class="grow"><small style="margin:0 0 2px">Travel manager</small><b>${esc(INV.manager || '')} · ${esc(INV.company || '')}</b></div></div>`;
+    return;
+  }
+  const rows = [
+    ['mail', 'Email', INV.email],
+    ['phone', 'Mobile', r?.phone || 'Not added'],
+    ['currency', 'Home currency', r?.homeCurrency || '—'],
+    ['bank', 'Bank account', r ? `•••• ${r.bank.last4} · ${r.bank.code}` : 'Not added'],
+    ['briefcase', 'Travel manager', `${INV.manager || ''} · ${INV.company || ''}`],
+  ];
+  $('m-details').innerHTML = rows.map(([ic, k, v]) => `<div class="row"><span class="ic plain">${icon(ic)}</span><div class="grow"><small style="margin:0 0 2px">${esc(k)}</small><b>${esc(v)}</b></div></div>`).join('');
+}
+$('m-signout').onclick = () => { session.clear(); INV = null; $('top-actions').hidden = true; go('signin', { replace: true }); };
+
+// ---------------------------------------------------------------- welcome and registration
+function renderWelcome() {
+  const ls = legs();
+  const codes = routeCodes(ls);
+  $('w-title').innerHTML = `Hi ${esc(firstName())},<br><em>you're covered.</em>`;
+  $('w-lede').textContent = `${INV.company} has set up Detour for your trip.`;
+  const tz = ls[0] ? tzOf(ls[0].from) : 'UTC';
+  $('w-trip').innerHTML = `<div class="flight-head">${icon('plane')}<b>${esc(codes.map(city).join(' → '))}</b></div>
+    <div class="meta" style="border:0;padding-top:4px;margin-top:6px;flex-wrap:wrap;gap:10px 18px"><span>${icon('calendar')}${ls[0] ? esc(dayDate(ls[0].dep, tz)) : ''}</span><span>${icon('plane')}${esc(ls.map((l) => l.id).join(' · '))}</span></div>`;
+  $('w-by').innerHTML = `<span class="avatar">${esc(initials(INV.manager || 'S'))}</span><div class="grow"><small style="margin:0">Invited by</small><b>${esc(INV.manager)}, Travel manager</b></div>`;
+  $('r-name').value = INV.name;
+  $('r-holder').value = INV.name;
 }
 
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-share-inbox]');
-  if (b && !b.disabled) { b.disabled = true; api('/api/airline-message', { inboxId: b.dataset.shareInbox, how: 'forwarded' }); }
-  if (e.target.closest('#share-any')) openSheet();
-});
+$('reg1-form').onsubmit = (e) => {
+  e.preventDefault();
+  const err = $('reg1-error');
+  err.textContent = '';
+  if (!$('r-name').value.trim()) { err.textContent = 'Add your full name.'; return; }
+  if (!/^\+?[\d\s()-]{7,}$/.test($('r-phone').value.trim())) { err.textContent = 'Add a mobile number, with the country code.'; return; }
+  if (!$('r-holder').value.trim() || $('r-holder').value === INV.name) $('r-holder').value = $('r-name').value.trim();
+  go('reg2');
+};
+$('reg2-form').onsubmit = async (e) => {
+  e.preventDefault();
+  $('reg2-error').textContent = '';
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Saving';
+  const j = await api('/api/traveller/register', {
+    token: INV.token,
+    name: $('r-name').value,
+    phone: $('r-phone').value,
+    homeCurrency: $('r-cur').value,
+    bank: { country: $('r-country').value, holder: $('r-holder').value, account: $('r-account').value, code: $('r-code').value },
+    messages: $('r-msgs').checked,
+  }, { quiet: true });
+  btn.disabled = false;
+  btn.textContent = 'Finish';
+  if (!j.ok) { $('reg2-error').textContent = j.error; return; }
+  INV.registration = j.result;
+  session.set({ token: INV.token, email: INV.email });
+  $('r-account').value = '';
+  go('mapintro', { replace: true });
+};
 
-// The share sheet
+onView('mapintro', () => {
+  const ls = legs();
+  drawRoute($('intro-map'), ls.map((l) => ({ from: l.from, to: l.to, state: 'next' })));
+  const f = nextLeg(ls);
+  $('intro-next').innerHTML = f ? `<div class="row"><span class="ic">${icon('plane')}</span><div class="grow"><small style="margin:0 0 2px">Next flight</small><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>${esc(dateHm(f.dep, tzOf(f.from)))} ${esc(city(f.from))} time</small></div>${flightPill(f)}</div>` : '';
+});
+$('intro-go').onclick = showMain;
+
+// ---------------------------------------------------------------- share an airline message
 let sheetHow = 'pasted';
 function openSheet(text = '', how = 'pasted') {
+  if (!live()) { toast('Sharing opens when your trip starts.'); return; }
   sheetHow = how;
   $('sheet-text').value = text;
-  $('sheet-status').textContent = '';
+  $('sheet-status').textContent = 'JPG or PNG · read on your phone';
   $('sheet').hidden = false;
-  $('sheet-backdrop').hidden = false;
-  setTimeout(() => $('sheet-text').focus(), 50);
+  $('scrim').hidden = false;
 }
-function closeSheet() { $('sheet').hidden = true; $('sheet-backdrop').hidden = true; }
+function closeSheet() { $('sheet').hidden = true; $('scrim').hidden = true; }
+function renderSheetInbox() {
+  const items = live() ? (S?.inbox || []).filter((m) => !m.shared).slice().reverse() : [];
+  $('sheet-inbox').innerHTML = items.length ? `<div class="or">or forward from your inbox</div><div class="card">${items.map((m) => `<button class="row tap" data-forward="${esc(m.id)}"><span class="ic plain">${icon('mail')}</span><div class="grow"><b>${esc(m.subject)}</b><small>${esc(m.from.replace(/\s*<.*>/, ''))}</small></div>${icon('send', 'chev')}</button>`).join('')}</div>` : '';
+}
+$('h-share').onclick = () => openSheet();
+$('chat-clip').onclick = () => openSheet();
+$('sheet-x').onclick = closeSheet;
 $('sheet-cancel').onclick = closeSheet;
-$('sheet-backdrop').onclick = closeSheet;
+$('scrim').onclick = closeSheet;
 $('sheet-send').onclick = async () => {
   const text = $('sheet-text').value.trim();
   if (!text) { $('sheet-status').textContent = 'Paste a message or add a screenshot first.'; return; }
-  if (S?.busy || S?.playing) { $('sheet-status').textContent = 'Detour is busy, try again in a moment.'; return; }
+  if (S?.busy || S?.playing) { toast('Detour is busy. Try again in a moment.'); return; }
   closeSheet();
-  setupTabsShow('messages');
+  go('messages', { replace: true });
   await api('/api/airline-message', { text, how: sheetHow });
 };
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-forward]');
+  if (!b || b.disabled) return;
+  b.disabled = true;
+  closeSheet();
+  api('/api/airline-message', { inboxId: b.dataset.forward, how: 'forwarded' });
+  go('messages', { replace: true });
+});
 
-// Screenshots are read on the phone (Tesseract OCR, loaded only when needed); only text is sent.
+// Screenshots are read on the phone (Tesseract, loaded only when needed); only the text is sent.
 let ocrLib = null;
 async function readImage(file) {
-  $('sheet-status').innerHTML = '<span class="spinner"></span>Reading the screenshot on your phone…';
+  $('sheet-status').innerHTML = '<span class="spin" style="width:12px;height:12px;vertical-align:-1px;margin-right:6px"></span>Reading the screenshot on your phone…';
   try {
     if (!ocrLib) {
       await new Promise((ok, fail) => {
@@ -207,7 +439,7 @@ async function readImage(file) {
     if (!text) throw new Error('no text');
     $('sheet-text').value = text;
     sheetHow = 'screenshot';
-    $('sheet-status').textContent = 'Check the text, then send.';
+    $('sheet-status').textContent = 'Check the text above, then send.';
   } catch {
     $('sheet-status').textContent = "Couldn't read that image. Try pasting the text instead.";
   }
@@ -223,15 +455,16 @@ async function pickUpShared() {
   await cache.delete('/shared/text');
   await cache.delete('/shared/image');
   history.replaceState(null, '', '/traveller');
-  openSheet(textRes ? await textRes.text() : '', 'shared');
-  if (imageRes) readImage(await imageRes.blob());
+  const wait = setInterval(() => {
+    if (!INV || !S) return;
+    clearInterval(wait);
+    openSheet(textRes ? '' : '', 'shared');
+    if (textRes) textRes.text().then((t) => { $('sheet-text').value = t; });
+    if (imageRes) imageRes.blob().then(readImage);
+  }, 200);
 }
 
-const setupTabsShow = setupTabs(screen, (name) => {
-  screen = name;
-  if (S) render(S);
-  if (name === 'messages') $('tv-chat').scrollTop = $('tv-chat').scrollHeight;
-});
-DetourDock.mount();
 connect(render);
-pickUpShared();
+start().then(pickUpShared);
+// ?tab=<view> opens a screen directly (used by the demo page and for screenshots).
+if (params.get('tab')) setTimeout(() => INV && go(params.get('tab'), { replace: true }), 300);

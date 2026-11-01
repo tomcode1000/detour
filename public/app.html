@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#04111b">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Detour">
   <title>Detour</title>
   <script>
@@ -20,32 +21,38 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="ui.css">
-  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="app.css">
 </head>
-<body class="tv-body">
-  <div class="tv ln">
-    <div class="ln-in">
-      <img class="ln-logo" src="/icons/icon-192.png" alt="">
-      <div>
-        <h1>Money that follows you when a flight breaks.</h1>
-        <p>Detour pays for meals, taxis and a hotel when a trip is disrupted, inside your company's travel policy.</p>
-      </div>
-      <div class="ln-roles">
-        <a class="ln-role" href="/traveller">
-          <i><svg viewBox="0 0 24 24"><path d="M3 12.5 21 6l-4.5 15-4-6.5z"/><path d="m12.5 14.5 4-4"/></svg></i>
-          <div><b>I'm travelling</b><span>See what's covered and talk to Detour</span></div>
-          <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+<body class="chooser-page">
+  <div class="chooser">
+    <header class="chooser-top">
+      <a class="logo white" href="/" aria-label="Detour website"><svg aria-hidden="true"><use href="#logo-w"/></svg>Detour</a>
+      <a class="icon-btn info" href="/" aria-label="About Detour"><svg class="i"><use href="#i-info"/></svg></a>
+    </header>
+    <main class="chooser-main">
+      <p class="eyebrow center-eyebrow">Welcome to Detour</p>
+      <h1>How would you like to use <em>Detour?</em></h1>
+      <p class="chooser-sub">Choose your role to get started.</p>
+      <div class="role-cards">
+        <a class="role-card" href="/traveller" style="background-image:url('/img/app/role-travel.jpg')">
+          <span class="role-ic"><svg class="i"><use href="#i-plane"/></svg></span>
+          <h2>I'm travelling</h2>
+          <p>See what's covered during a disruption, check payments and talk to Detour.</p>
+          <span class="btn block">Continue as Traveller <svg class="i"><use href="#i-arrow"/></svg></span>
         </a>
-        <a class="ln-role" href="/manager">
-          <i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></i>
-          <div><b>I manage travel</b><span>Trips, approvals and payments for your company</span></div>
-          <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+        <a class="role-card" href="/manager" style="background-image:url('/img/app/role-manage.jpg')">
+          <span class="role-ic"><svg class="i"><use href="#i-users"/></svg></span>
+          <h2>I manage travel</h2>
+          <p>Review disrupted trips, approve requests and monitor payments.</p>
+          <span class="btn block">Continue as Travel Manager <svg class="i"><use href="#i-arrow"/></svg></span>
         </a>
       </div>
-      <p class="ln-foot">Demo company: Northwind Robotics · Airwallex sandbox</p>
-    </div>
+    </main>
+    <footer class="chooser-foot"><svg class="i"><use href="#i-shield-o"/></svg><span>Secured by Detour</span></footer>
   </div>
-  <script src="mobile.js"></script>
+  <script src="app-core.js"></script>
+  <script>
+    document.body.insertAdjacentHTML('afterbegin', '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="logo-w" viewBox="0 0 32 35"><path fill="#fff" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="#04111b" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></symbol></svg>');
+  </script>
 </body>
 </html>

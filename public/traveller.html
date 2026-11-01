@@ -3,72 +3,180 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#04111b">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Detour">
-  <title>Detour</title>
+  <title>Detour · Traveller</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="ui.css">
-  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="app.css">
 </head>
-<body class="tv-body">
-  <div class="tv">
-    <header class="tv-top">
-      <div class="tv-brand">
-        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 21.5c3.2 0 4.2-2.2 5.4-5.2 1.3-3.2 2.6-5.8 6.6-5.8h2.5" /><path d="M19.5 7.5l3 3-3 3" /></svg>
-        <span>Detour</span>
-      </div>
-      <a class="tv-switch" href="/app?choose" title="Switch role">Traveller</a>
-    </header>
+<body>
+  <div class="stage">
+    <div class="app no-tabs">
+      <header class="top" id="top">
+        <button class="back" id="back" data-back hidden aria-label="Back" data-icon="chev-l"></button>
+        <span class="logo" data-logo>Detour</span>
+        <div class="top-actions" id="top-actions" hidden>
+          <button class="icon-btn" data-go="messages" aria-label="Messages" data-icon="bell"><i class="dot" id="bell-dot" hidden></i></button>
+          <button class="avatar" data-go="more" id="top-avatar" aria-label="Your profile"></button>
+        </div>
+      </header>
 
-    <main class="tv-screens">
-      <section class="tv-screen active" data-screen="trip">
-        <div class="tv-hero" id="tv-hero"></div>
-        <div class="tv-card" id="tv-flight"></div>
-        <div class="tv-card" id="tv-inbox"></div>
-        <div class="tv-card" id="tv-hotel" hidden></div>
-        <div class="tv-card" id="tv-money"></div>
-        <p class="tv-fine" id="tv-fine"></p>
-      </section>
+      <main class="views">
+        <!-- Sign in with the invited email -->
+        <section class="view" data-view="signin" data-no-tabs>
+          <div class="hero-copy">
+            <p class="eyebrow">Traveller portal</p>
+            <h1 class="big-title" id="signin-title">Welcome <em>to Detour</em></h1>
+            <p class="lede">Enter the email your travel manager used to invite you.</p>
+          </div>
+          <form class="form" id="signin-form" novalidate>
+            <div class="mail-field"><svg class="i"><use href="#i-mail"/></svg><label><span>Your email</span><input id="signin-email" type="email" autocomplete="email" inputmode="email" placeholder="you@company.com" required></label></div>
+            <p class="form-error" id="signin-error"></p>
+            <button class="btn primary block" type="submit">Continue <svg class="i"><use href="#i-arrow"/></svg></button>
+          </form>
+          <p class="fine">Demo traveller: ada.lim@northwind.example</p>
+          <div class="secured"><svg class="i"><use href="#i-shield-o"/></svg>Secured by Detour</div>
+        </section>
 
-      <section class="tv-screen" data-screen="messages">
-        <div class="tv-chat" id="tv-chat"></div>
-        <form class="tv-composer" id="tv-form">
-          <input id="tv-text" autocomplete="off" placeholder="Message Detour">
-          <button type="submit" class="send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
-        </form>
-      </section>
-    </main>
+        <!-- First open of an invite: the trip is already set up -->
+        <section class="view" data-view="welcome" data-no-tabs>
+          <div class="hero-copy">
+            <p class="eyebrow">Your trip</p>
+            <h1 class="big-title" id="w-title"></h1>
+            <p class="lede" id="w-lede"></p>
+          </div>
+          <div class="card pad" id="w-trip"></div>
+          <div class="section-head"><h2>What's covered</h2></div>
+          <div class="card covers">
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-meal"/></svg></span><div class="grow"><b>Meals and taxis</b><small>Paid to you if your flight is disrupted</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-bed"/></svg></span><div class="grow"><b>Hotel</b><small>Paid directly to the hotel</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-chat"/></svg></span><div class="grow"><b>Help</b><small>Message Detour any time</small></div></div>
+          </div>
+          <div class="row" id="w-by"></div>
+          <button class="btn primary block" data-go="reg1">Get started <svg class="i"><use href="#i-arrow"/></svg></button>
+        </section>
 
-    <!-- Share an airline message: paste, screenshot (read on the phone), or Android share -->
-    <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
-    <section class="sheet" id="sheet" hidden aria-label="Share an airline message">
-      <div class="sheet-grab"></div>
-      <h2>Share an airline message</h2>
-      <p class="sheet-sub">Paste the airline's email or text, or add a screenshot. Detour checks it against your flight status before anything changes.</p>
-      <textarea id="sheet-text" rows="6" placeholder="Paste the message here"></textarea>
-      <div class="sheet-row">
-        <label class="btn" for="sheet-file"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m20.5 16-5-5-8 8"/></svg>Add screenshot</label>
+        <section class="view" data-view="expired" data-no-tabs>
+          <div class="done-mark" style="background:var(--orange-bg);color:var(--orange)"><svg class="i"><use href="#i-clock"/></svg></div>
+          <div class="center"><h1 class="title">This invite has expired</h1><p class="sub" id="x-lede"></p></div>
+          <button class="btn ghost block" id="x-again">Use a different email</button>
+        </section>
+
+        <!-- Finish registration, step 1 -->
+        <section class="view" data-view="reg1" data-no-tabs data-sub>
+          <div class="steps"><i class="on"></i><i></i><span>1 of 2</span></div>
+          <div class="page-head"><h1 class="title">About you</h1><p class="sub">So Detour can reach you when a flight changes.</p></div>
+          <form class="form" id="reg1-form" novalidate>
+            <label class="field"><span>Full name</span><input id="r-name" autocomplete="name" required></label>
+            <label class="field"><span>Mobile number</span><input id="r-phone" type="tel" autocomplete="tel" placeholder="+65 9123 4567" required></label>
+            <label class="field"><span>Home currency</span><select id="r-cur"><option>SGD</option><option>EUR</option><option>GBP</option><option>USD</option><option>AUD</option><option>JPY</option><option>HKD</option></select><small>Allowances arrive in this currency.</small></label>
+            <p class="form-error" id="reg1-error"></p>
+            <button class="btn primary block" type="submit">Continue <svg class="i"><use href="#i-arrow"/></svg></button>
+          </form>
+        </section>
+
+        <!-- Finish registration, step 2 -->
+        <section class="view" data-view="reg2" data-no-tabs data-sub>
+          <div class="steps"><i class="on"></i><i class="on"></i><span>2 of 2</span></div>
+          <div class="page-head"><h1 class="title">Where we send your money</h1><p class="sub">Your allowances for meals and taxis go to this account.</p></div>
+          <form class="form" id="reg2-form" novalidate>
+            <label class="field"><span>Bank country</span><select id="r-country"><option value="SG">Singapore</option><option value="GB">United Kingdom</option><option value="DE">Germany</option><option value="US">United States</option><option value="AU">Australia</option><option value="HK">Hong Kong</option><option value="JP">Japan</option></select></label>
+            <label class="field"><span>Account holder name</span><input id="r-holder" autocomplete="name" required></label>
+            <label class="field"><span>Account number</span><input id="r-account" inputmode="numeric" autocomplete="off" placeholder="1234567890" required></label>
+            <label class="field"><span>Bank code (SWIFT or local)</span><input id="r-code" autocomplete="off" placeholder="DBSSSGSG" required></label>
+            <div class="note"><svg class="i"><use href="#i-lock"/></svg><span>Only used for your trip allowances. Your company never sees these details. This demo keeps just the last four digits.</span></div>
+            <label class="check"><input type="checkbox" id="r-msgs" checked><span>Send me messages about my trip</span></label>
+            <p class="form-error" id="reg2-error"></p>
+            <button class="btn primary block" type="submit">Finish</button>
+          </form>
+        </section>
+
+        <!-- Route map, first view after registering -->
+        <section class="view" data-view="mapintro" data-no-tabs>
+          <div class="page-head"><h1 class="title">You're all set</h1><p class="sub">Here is your trip. Detour watches every flight on it.</p></div>
+          <div class="map full" id="intro-map"></div>
+          <div class="card" id="intro-next"></div>
+          <button class="btn primary block" id="intro-go">Continue <svg class="i"><use href="#i-arrow"/></svg></button>
+        </section>
+
+        <!-- Main: Home -->
+        <section class="view" data-view="home">
+          <div class="who" id="h-who"></div>
+          <div id="h-status"></div>
+          <div id="h-flight"></div>
+          <div class="list" id="h-rows"></div>
+          <div id="h-covered"></div>
+          <button class="btn ghost block" id="h-share"><svg class="i"><use href="#i-clip"/></svg>Share an airline message</button>
+          <p class="fine" id="h-fine"></p>
+        </section>
+
+        <!-- Main: Trips -->
+        <section class="view" data-view="trips">
+          <div class="page-head"><h1 class="title">Your trip</h1><p class="sub" id="t-sub"></p></div>
+          <div class="map" id="trip-map"></div>
+          <div class="section-head"><h2>Flights</h2></div>
+          <div class="card" id="t-legs"></div>
+          <div id="t-cover"></div>
+          <div class="section-head"><h2>Airline emails</h2></div>
+          <div class="card" id="t-inbox"></div>
+        </section>
+
+        <!-- Main: Messages -->
+        <section class="view chat-view" data-view="messages">
+          <div class="chat-head"><span class="avatar md" data-logo></span><div><b>Detour</b><small id="chat-status">Your trip assistant</small></div></div>
+          <div class="chat" id="chat"></div>
+          <form class="composer" id="composer">
+            <button type="button" class="clip" id="chat-clip" aria-label="Share an airline message"><svg class="i"><use href="#i-clip"/></svg></button>
+            <input id="chat-text" autocomplete="off" placeholder="Type a message…">
+            <button type="submit" class="send" aria-label="Send"><svg class="i"><use href="#i-send"/></svg></button>
+          </form>
+        </section>
+
+        <!-- Main: More -->
+        <section class="view" data-view="more">
+          <div class="who" id="m-who"></div>
+          <div class="card" id="m-details"></div>
+          <div class="card">
+            <a class="row tap" href="/app?choose"><span class="ic"><svg class="i"><use href="#i-swap"/></svg></span><div class="grow"><b>Switch role</b><small>Open Detour as a travel manager</small></div><svg class="i chev"><use href="#i-chev-r"/></svg></a>
+            <button class="row tap" id="m-signout"><span class="ic red"><svg class="i"><use href="#i-logout"/></svg></span><div class="grow"><b>Sign out</b><small>Remove your trip from this phone</small></div></button>
+          </div>
+          <p class="fine">Demo: scripted flight feed and fictional people. Payments run in the Airwallex sandbox.</p>
+        </section>
+      </main>
+
+      <nav class="tabs" aria-label="Main">
+        <button data-go="home"><svg class="i"><use href="#i-home"/></svg>Home</button>
+        <button data-go="trips"><svg class="i"><use href="#i-plane"/></svg>Trips</button>
+        <button data-go="messages"><svg class="i"><use href="#i-chat"/></svg>Messages<span class="count" id="msg-count" hidden></span></button>
+        <button data-go="more"><svg class="i"><use href="#i-more"/></svg>More</button>
+      </nav>
+
+      <!-- Share an airline message -->
+      <div class="scrim" id="scrim" hidden></div>
+      <section class="sheet" id="sheet" hidden aria-label="Share an airline message">
+        <div class="grab"></div>
+        <div class="sheet-head"><svg class="i lead"><use href="#i-plane"/></svg><h2>Share airline message</h2><button class="icon-btn" id="sheet-x" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <p class="sub" style="margin-top:-6px">Paste the airline message or upload a screenshot of your notification.</p>
+        <label class="field"><textarea id="sheet-text" rows="4" placeholder="Paste airline message here…"></textarea></label>
+        <div class="or">or</div>
+        <label class="drop" for="sheet-file"><svg class="i"><use href="#i-image"/></svg><span><b>Upload screenshot</b><small id="sheet-status">JPG or PNG · read on your phone</small></span></label>
         <input type="file" id="sheet-file" accept="image/*" hidden>
-        <span class="sheet-status" id="sheet-status"></span>
-      </div>
-      <p class="sheet-note">Screenshots are read on your phone. Only the text is sent, never the image.</p>
-      <div class="sheet-actions"><button class="btn lg-touch" id="sheet-cancel" type="button">Cancel</button><button class="btn primary lg-touch" id="sheet-send" type="button">Send to Detour</button></div>
-    </section>
+        <div id="sheet-inbox"></div>
+        <div class="note"><svg class="i"><use href="#i-lock"/></svg><span>Your data is secure. Screenshots are read on your phone and only the text is sent. Detour checks it against your flight status before anything changes.</span></div>
+        <div class="btn-row"><button class="btn ghost" id="sheet-cancel">Cancel</button><button class="btn primary" id="sheet-send">Send to Detour <svg class="i"><use href="#i-arrow"/></svg></button></div>
+      </section>
 
-    <nav class="tv-tabs" id="tv-tabs">
-      <button data-screen="trip" class="active"><svg viewBox="0 0 24 24"><path d="M3 12.5 21 6l-4.5 15-4-6.5z"/><path d="m12.5 14.5 4-4"/></svg>Trip</button>
-      <button data-screen="messages"><svg viewBox="0 0 24 24"><path d="M4 5.5h16v10H9l-5 4z"/></svg>Messages<span class="tv-badge" id="tv-badge"></span></button>
-    </nav>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
   </div>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="demo-dock.js"></script>
-  <script src="mobile.js"></script>
+  <script src="app-core.js"></script>
   <script src="traveller.js"></script>
 </body>
 </html>

@@ -4,68 +4,131 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Detour · Live demo</title>
+  <meta name="description" content="Follow a real disruption: the travel manager's phone and the traveller's phone, side by side.">
+  <meta name="theme-color" content="#030b11">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
-  <link rel="stylesheet" href="ui.css">
-  <style>
-    html, body { height: 100%; }
-    body { display: flex; flex-direction: column; background: #0d1117; overflow: hidden; }
-    .demo-top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; color: #e6e9ee; border-bottom: 1px solid #232a33; }
-    .demo-top a.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 0; }
-    .demo-top .mark { width: 22px; height: 22px; }
-    .demo-top .sub { color: #8b95a3; font-size: 12px; }
-    .demo-top nav { margin-left: auto; display: flex; gap: 14px; font-size: 12.5px; }
-    .demo-top nav a { color: #8b95a3; text-decoration: none; }
-    .demo-top nav a:hover { color: #fff; }
-    #dock-slot { border-bottom: 1px solid #232a33; }
-    .stage { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: stretch; gap: 40px; padding: 18px 16px 22px; }
-    .pane { min-height: 0; width: 390px; display: flex; flex-direction: column; gap: 10px; }
-    .pane-label { color: #8b95a3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; display: flex; justify-content: space-between; padding: 0 6px; }
-    .pane-label a { color: #5cc8bc; text-decoration: none; text-transform: none; letter-spacing: 0; }
-    .phone-frame { flex: 1; min-height: 0; max-height: 860px; border-radius: 34px; padding: 9px; background: #1d232b; box-shadow: inset 0 0 0 1px #2b333d, 0 30px 60px -20px rgba(0, 0, 0, 0.6); display: flex; }
-    iframe { flex: 1; width: 100%; border: 0; border-radius: 26px; background: #fff; }
-    @media (max-width: 860px) { .stage { flex-direction: column; align-items: center; overflow-y: auto; } .phone-frame { min-height: 760px; } body { overflow: auto; } }
-  </style>
+  <link rel="stylesheet" href="home.css">
+  <link rel="stylesheet" href="site.css">
 </head>
-<body>
-  <header class="demo-top">
-    <a class="brand" href="/" style="color:inherit;text-decoration:none">
-      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M8 21.5c3.2 0 4.2-2.2 5.4-5.2 1.3-3.2 2.6-5.8 6.6-5.8h2.5" /><path d="M19.5 7.5l3 3-3 3" /></svg>
-      <span>Detour</span>
-    </a>
-    <span class="sub">Live demo · the travel manager and the traveller, side by side</span>
-    <nav><a href="/">Overview</a><a href="/download">Get the app</a></nav>
+<body class="site-bg demo-page">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="logo" viewBox="0 0 32 35"><path fill="currentColor" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="var(--logo-cut, #060a0d)" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></symbol>
+  </svg>
+  <header class="nav">
+    <div class="nav-in">
+      <a class="brand" href="/" aria-label="Detour home"><svg class="brand-mark"><use href="#logo"/></svg>Detour</a>
+      <nav class="nav-links" aria-label="Main">
+        <a href="/#how">How it works</a>
+        <a href="/security">Security</a>
+        <a href="/#companies">For companies</a>
+        <a href="/download">Download</a>
+      </nav>
+      <a class="pill-btn nav-cta" href="/download">Get the app</a>
+    </div>
   </header>
-  <div id="dock-slot"></div>
-  <main class="stage">
-    <section class="pane">
-      <div class="pane-label"><span>Travel manager · Sam</span><a href="/manager" target="_blank" rel="noopener">Open</a></div>
-      <div class="phone-frame"><iframe src="/manager?embed" title="Detour travel manager app"></iframe></div>
+
+  <main class="demo-stage">
+    <section class="demo-col">
+      <div class="demo-label"><b>Travel manager</b>· Sam<a href="/manager" target="_blank" rel="noopener">Open</a></div>
+      <div class="device"><div class="screen">
+        <div class="status"><span>9:41</span><i></i><span><svg viewBox="0 0 18 10"><rect y="6" width="3" height="4" rx=".6"/><rect x="5" y="4" width="3" height="6" rx=".6"/><rect x="10" y="2" width="3" height="8" rx=".6"/><rect x="15" width="3" height="10" rx=".6"/></svg><svg viewBox="0 0 22 10"><rect x=".5" y=".5" width="18" height="9" rx="2.5" fill="none" stroke="#fff" opacity=".45"/><rect x="2" y="2" width="15" height="6" rx="1.4"/><rect x="19.8" y="3.3" width="1.6" height="3.4" rx=".8" opacity=".45"/></svg></span></div>
+        <iframe src="/manager?embed" title="Detour travel manager app"></iframe>
+      </div></div>
     </section>
-    <section class="pane">
-      <div class="pane-label"><span>Traveller · Ada</span><a href="/traveller" target="_blank" rel="noopener">Open</a></div>
-      <div class="phone-frame"><iframe src="/traveller?embed&amp;tab=messages" title="Detour traveller app"></iframe></div>
+    <section class="demo-col">
+      <div class="demo-label"><b>Traveller</b>· Ada<a href="/traveller" target="_blank" rel="noopener">Open</a></div>
+      <div class="device"><div class="screen">
+        <div class="status"><span>9:41</span><i></i><span><svg viewBox="0 0 18 10"><rect y="6" width="3" height="4" rx=".6"/><rect x="5" y="4" width="3" height="6" rx=".6"/><rect x="10" y="2" width="3" height="8" rx=".6"/><rect x="15" width="3" height="10" rx=".6"/></svg><svg viewBox="0 0 22 10"><rect x=".5" y=".5" width="18" height="9" rx="2.5" fill="none" stroke="#fff" opacity=".45"/><rect x="2" y="2" width="15" height="6" rx="1.4"/><rect x="19.8" y="3.3" width="1.6" height="3.4" rx=".8" opacity=".45"/></svg></span></div>
+        <iframe src="/traveller?embed" title="Detour traveller app"></iframe>
+      </div></div>
     </section>
   </main>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="demo-dock.js"></script>
+
+  <footer class="demo-bar">
+    <div class="demo-bar-in">
+      <div class="demo-info"><span class="ring">i</span>This is a live demo. No real payments are made.</div>
+      <div class="demo-scene">
+        <span class="scene-ic"><svg viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg></span>
+        <div class="txt"><b id="d-scene">Ready</b><span id="d-text">Ada flies Singapore to London via Frankfurt.</span></div>
+      </div>
+      <div class="demo-progress"><div class="track"><div class="fill" id="d-fill" style="width:0"></div></div><output id="d-count">0 / 0</output></div>
+      <div class="demo-btns">
+        <button class="circle-btn" id="d-reset" title="Restart the story" aria-label="Restart"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg></button>
+        <button class="pill-btn" id="d-next" title="Next event (N)">Next event <svg><use href="#arrow"/></svg></button>
+        <button class="circle-btn go" id="d-play" title="Play until a decision is needed (P)" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg></button>
+      </div>
+    </div>
+  </footer>
+
   <script>
-    let toastTimer;
-    window.DetourToast = (text) => {
-      const t = document.getElementById('toast');
-      t.textContent = text; t.classList.add('show');
-      clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
-    };
-    DetourDock.mount({ inline: true });
-    // ?snapshot (for screenshots): load once and pass it on to the embedded apps.
+    // Phones: each app runs at a real 390px phone width, scaled to fit the screen.
+    function fit() {
+      const wide = innerWidth > 900;
+      document.querySelectorAll('.demo-col').forEach((col) => {
+        const dev = col.querySelector('.device');
+        if (wide) {
+          const h = col.clientHeight - col.querySelector('.demo-label').offsetHeight - 10;
+          dev.style.height = `${h}px`;
+          dev.style.width = `${h * 410 / 864}px`;
+        } else {
+          dev.style.height = ''; dev.style.width = '';
+        }
+      });
+      document.querySelectorAll('.screen').forEach((sc) => {
+        const f = sc.querySelector('iframe');
+        const s = sc.clientWidth / 390;
+        sc.querySelector('.status').style.transform = `scale(${s})`;
+        f.style.top = `${44 * s}px`;
+        f.style.width = '390px';
+        f.style.height = `${(sc.clientHeight - 44 * s) / s}px`;
+        f.style.transform = `scale(${s})`;
+      });
+    }
+    addEventListener('resize', fit);
+    new ResizeObserver(fit).observe(document.querySelector('.demo-stage'));
+    fit();
+
+    // Story controls (the scripted flight feed), kept outside the product screens.
+    const $ = (id) => document.getElementById(id);
+    async function post(path) {
+      try {
+        const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const j = await r.json();
+        if (!j.ok) alert(j.error || 'Something went wrong.');
+      } catch { alert('Lost connection to the Detour server.'); }
+    }
+    $('d-reset').onclick = () => post('/api/reset');
+    $('d-next').onclick = () => post('/api/step');
+    $('d-play').onclick = () => post('/api/run');
+    document.addEventListener('keydown', (e) => {
+      if (e.target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'n' || e.key === 'N') $('d-next').click();
+      if (e.key === 'p' || e.key === 'P') $('d-play').click();
+    });
+    function update(s) {
+      const p = s.progress;
+      $('d-scene').textContent = s.scene ? s.scene.name : 'Ready';
+      const doing = s.activity ? `${s.activity}…` : p.waiting ? `Waiting for ${s.manager} to decide on the left phone` : '';
+      $('d-text').textContent = doing || (s.scene ? s.scene.text : 'Ada flies Singapore to London via Frankfurt. Press Next event.');
+      $('d-text').className = doing ? 'activity' : '';
+      $('d-fill').style.width = `${Math.round((p.at / p.total) * 100)}%`;
+      $('d-count').textContent = `${p.at} / ${p.total}`;
+      const blocked = s.busy || s.playing || p.finished || p.waiting;
+      $('d-next').disabled = blocked;
+      $('d-play').disabled = blocked;
+      $('d-reset').disabled = s.busy || s.playing;
+      $('d-next').firstChild.textContent = p.finished ? 'Story complete ' : p.waiting ? 'Needs approval ' : 'Next event ';
+    }
     if (new URLSearchParams(location.search).has('snapshot')) {
       document.querySelectorAll('iframe').forEach((f) => { f.src += '&snapshot'; });
-      fetch('/api/state').then((r) => r.json()).then(DetourDock.update);
+      fetch('/api/state').then((r) => r.json()).then(update);
     } else {
       const events = new EventSource('/events');
-      events.onmessage = (e) => DetourDock.update(JSON.parse(e.data));
+      events.onmessage = (e) => update(JSON.parse(e.data));
     }
   </script>
 </body>

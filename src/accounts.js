@@ -1,0 +1,181 @@
+// Accounts for the demo server: the company and its travel manager, trip invites, and travellers'
+// registrations. Kept in memory and restored to the demo company on reset, because every visitor
+// shares one demo. Bank details are reduced to the last four digits before they are stored.
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const FLIGHT = /^[A-Z0-9]{2}\s?\d{1,4}[A-Z]?$/i;
+const AIRPORT = /^[A-Z]{3}$/;
+const INVITE_DAYS = 14;
+
+const clean = (v, max = 120) => String(v ?? '').trim().slice(0, max);
+const hash = (password, salt = randomBytes(16).toString('hex')) => `${salt}:${scryptSync(password, salt, 32).toString('hex')}`;
+const checkHash = (password, stored) => {
+  const [salt, key] = stored.split(':');
+  const a = Buffer.from(key, 'hex');
+  const b = scryptSync(password, salt, 32);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
+
+export class Accounts {
+  constructor({ policy, scenario }) {
+    this.policy = policy;
+    this.scenario = scenario;
+    // What sign-up may change in the policy, kept so a reset can put the demo values back.
+    this.seedPolicy = JSON.stringify({ company: policy.company, travel_manager: policy.travel_manager, rules: policy.rules, cities: policy.cities });
+    this.reset();
+  }
+
+  reset() {
+    const seed = JSON.parse(this.seedPolicy);
+    Object.assign(this.policy, { company: seed.company, travel_manager: seed.travel_manager });
+    Object.assign(this.policy.rules, seed.rules);
+    for (const [code, c] of Object.entries(seed.cities)) Object.assign(this.policy.cities[code], c);
+
+    const t = this.scenario.traveller;
+    this.company = {
+      name: this.policy.company.replace(/\s*\(.*\)/, ''),
+      manager: this.policy.travel_manager,
+      email: 'sam.rivera@northwind.example',
+      country: 'SG',
+      currency: 'EUR',
+      password: null,
+      demo: true,
+    };
+    const now = Date.now();
+    this.invites = [{
+      token: 'ada-demo',
+      name: `${t.first_name} ${t.last_name}`,
+      email: t.email,
+      role: t.role,
+      flights: this.scenario.legs.map((id) => {
+        const f = this.scenario.flights[id];
+        return { id: f.id, from: f.from, to: f.to, dep: f.sched_dep, arr: f.sched_arr };
+      }),
+      live: true,
+      createdAt: now,
+      expiresAt: now + INVITE_DAYS * 864e5,
+    }];
+    this.registrations = new Map();
+  }
+
+  view() {
+    const { password, ...company } = this.company;
+    return {
+      company,
+      invites: this.invites.map((i) => ({ ...i, registered: this.registrations.has(i.email) })),
+    };
+  }
+
+  signup(b) {
+    const company = clean(b.company, 80);
+    const manager = clean(b.manager, 80);
+    const email = clean(b.email, 120).toLowerCase();
+    const password = String(b.password ?? '');
+    if (!company || !manager) throw new Error('Add your company name and your name.');
+    if (!EMAIL.test(email)) throw new Error('That email address does not look right.');
+    if (password.length < 8) throw new Error('Use a password of at least 8 characters.');
+    const apply = this.checkPolicy(b.policy);
+
+    this.company = { name: company, manager, email, country: clean(b.country, 2).toUpperCase() || 'SG', currency: clean(b.currency, 3).toUpperCase() || 'EUR', password: hash(password), demo: false };
+    this.policy.company = company;
+    this.policy.travel_manager = manager;
+    apply();
+    return this.view();
+  }
+
+  // Edits from the policy screen: same checks as sign-up.
+  updatePolicy(p) {
+    this.checkPolicy(p)();
+    return this.view();
+  }
+
+  // Validates policy input and returns a function that applies it.
+  checkPolicy(p = {}) {
+    const nights = Number(p.auto_nights);
+    const raise = Number(p.max_auto_raise_pct);
+    if (!Number.isInteger(nights) || nights < 0 || nights > 5) throw new Error('Nights covered automatically must be between 0 and 5.');
+    if (!(raise >= 0 && raise <= 200)) throw new Error('The approval threshold must be between 0% and 200%.');
+    for (const [code, r] of Object.entries(p.cities || {})) {
+      if (!this.policy.cities[code]) throw new Error(`Unknown city ${code}.`);
+      for (const k of ['meals', 'transport', 'lodging']) {
+        if (!(Number(r[k]) > 0 && Number(r[k]) < 10000)) throw new Error(`Check the ${k} rate for ${this.policy.cities[code].city}.`);
+      }
+    }
+    return () => {
+      this.policy.rules.auto_nights = nights;
+      this.policy.rules.max_auto_raise_pct = raise;
+      for (const [code, r] of Object.entries(p.cities || {})) {
+        Object.assign(this.policy.cities[code], { meals_per_day: Number(r.meals), transport: Number(r.transport), lodging_per_night: Number(r.lodging) });
+      }
+    };
+  }
+
+  signin(b) {
+    if (b.demo) {
+      if (!this.company.demo) throw new Error('The demo company has been replaced. Reset the demo to use it again.');
+      return this.view();
+    }
+    const email = clean(b.email).toLowerCase();
+    if (email !== this.company.email || !this.company.password || !checkHash(String(b.password ?? ''), this.company.password)) {
+      throw new Error('Email or password is not right.');
+    }
+    return this.view();
+  }
+
+  invite(b) {
+    const name = clean(b.name, 80);
+    const email = clean(b.email).toLowerCase();
+    if (!name) throw new Error("Add the traveller's name.");
+    if (!EMAIL.test(email)) throw new Error('That email address does not look right.');
+    if (this.invites.some((i) => i.email === email)) throw new Error(`${email} already has a trip.`);
+    const flights = (Array.isArray(b.flights) ? b.flights : []).slice(0, 6).map((f) => ({
+      id: clean(f.id, 8).toUpperCase().replace(/\s+/g, ''),
+      from: clean(f.from, 8).toUpperCase(),
+      to: clean(f.to, 8).toUpperCase(),
+      dep: f.dep && !Number.isNaN(Date.parse(f.dep)) ? new Date(f.dep).toISOString() : null,
+      arr: f.arr && !Number.isNaN(Date.parse(f.arr)) ? new Date(f.arr).toISOString() : null,
+    }));
+    if (!flights.length) throw new Error('Add at least one flight.');
+    flights.forEach((f, i) => {
+      if (!FLIGHT.test(f.id)) throw new Error(`Flight ${i + 1}: use a flight number like LH403.`);
+      if (!AIRPORT.test(f.from) || !AIRPORT.test(f.to)) throw new Error(`Flight ${i + 1}: use three-letter airport codes like FRA.`);
+      if (!f.dep) throw new Error(`Flight ${i + 1}: add the departure date and time.`);
+    });
+    const now = Date.now();
+    const inv = { token: randomBytes(9).toString('base64url'), name, email, role: clean(b.role, 60) || 'Traveller', flights, live: false, createdAt: now, expiresAt: now + INVITE_DAYS * 864e5 };
+    this.invites.push(inv);
+    return { ...inv, registered: false };
+  }
+
+  find(b) {
+    const token = clean(b.token, 40);
+    const email = clean(b.email).toLowerCase();
+    const inv = this.invites.find((i) => (token && i.token === token) || (email && i.email === email));
+    if (!inv) throw new Error(email ? `There is no trip for ${email} yet. Ask your travel manager to invite you.` : 'This invite link is not valid.');
+    if (Date.now() > inv.expiresAt) return { ...inv, expired: true };
+    return { ...inv, company: this.company.name, manager: this.company.manager, registration: this.registrations.get(inv.email) || null };
+  }
+
+  register(b) {
+    const inv = this.invites.find((i) => i.token === clean(b.token, 40));
+    if (!inv) throw new Error('This invite link is not valid.');
+    if (Date.now() > inv.expiresAt) throw new Error('This invite has expired. Ask your travel manager for a new one.');
+    const phone = clean(b.phone, 24);
+    const account = clean(b.bank?.account, 34).replace(/\s+/g, '');
+    if (!/^\+?[\d\s()-]{7,}$/.test(phone)) throw new Error('Add a mobile number, with the country code.');
+    if (!clean(b.bank?.holder)) throw new Error('Add the account holder name.');
+    if (account.length < 6) throw new Error('Add your account number.');
+    if (!clean(b.bank?.code)) throw new Error('Add the bank code (SWIFT or local code).');
+    const reg = {
+      name: clean(b.name, 80) || inv.name,
+      phone,
+      homeCurrency: clean(b.homeCurrency, 3).toUpperCase() || 'SGD',
+      bank: { country: clean(b.bank.country, 2).toUpperCase(), holder: clean(b.bank.holder, 80), last4: account.slice(-4), code: clean(b.bank.code, 11).toUpperCase() },
+      messages: Boolean(b.messages),
+      at: Date.now(),
+    };
+    this.registrations.set(inv.email, reg);
+    return reg;
+  }
+}
