@@ -11,13 +11,25 @@ const setup = () => {
 };
 const flight = { id: 'LH403', from: 'FRA', to: 'JFK', dep: '2026-11-12T08:30:00Z' };
 
-test('the demo company and Ada\'s invite exist from the start', () => {
+test('the demo starts with the company and no trips', () => {
   const { accounts } = setup();
   const v = accounts.view();
   assert.equal(v.company.name, 'Northwind Robotics');
   assert.equal(v.company.password, undefined);
-  assert.equal(v.invites[0].email, 'ada.lim@northwind.example');
-  assert.equal(v.invites[0].registered, false);
+  assert.deepEqual(v.invites, []);
+  assert.equal(v.liveReady, false);
+});
+
+test("inviting Ada links her to the scripted trip, and the story is ready once she registers", () => {
+  const { accounts } = setup();
+  const inv = accounts.invite({ name: 'Ada Lim', email: 'ada.lim@northwind.example', flights: [flight] });
+  assert.equal(inv.live, true);
+  assert.deepEqual(inv.flights.map((f) => f.id), ['DA779', 'DA908']);
+  assert.equal(accounts.liveReady(), false);
+  accounts.register({ token: inv.token, phone: '+65 9123 4567', bank: { country: 'SG', holder: 'Ada Lim', account: '1234567890', code: 'DBSSSGSG' } });
+  assert.equal(accounts.liveReady(), true);
+  accounts.reset();
+  assert.equal(accounts.liveReady(), false);
 });
 
 test('sign-up sets the company and the policy, and reset puts the demo back', () => {

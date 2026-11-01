@@ -49,9 +49,14 @@ const send = (res, code, body) => {
   res.end(JSON.stringify(body));
 };
 
+// The story starts once the travel manager has added Ada's trip and she has finished registering.
+const needsTraveller = () => {
+  if (!accounts.liveReady()) throw new Error("Set up Ada first: add her trip on Sam's phone, then finish registering on Ada's phone.");
+};
+
 const actions = {
-  'POST /api/step': () => engine.step(),
-  'POST /api/run': () => engine.runToPause(),
+  'POST /api/step': () => { needsTraveller(); return engine.step(); },
+  'POST /api/run': () => { needsTraveller(); return engine.runToPause(); },
   'POST /api/reset': () => { accounts.reset(); return engine.reset(); },
   'POST /api/chat': (b) => (b.text ? engine.chat(String(b.text).slice(0, 500)) : null),
   'POST /api/decide': (b) => engine.decide(b.id, b.decision === 'approve' ? 'approve' : 'decline'),

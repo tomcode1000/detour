@@ -52,6 +52,7 @@
     <div class="demo-bar-in">
       <div class="demo-info"><span class="ring">i</span>This is a live demo. No real payments are made.</div>
       <div class="demo-scene">
+        <span class="demo-step" id="d-step" hidden></span>
         <span class="scene-ic"><svg viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg></span>
         <div class="txt"><b id="d-scene">Ready</b><span id="d-text">Ada flies Singapore to London via Frankfurt.</span></div>
       </div>
@@ -65,7 +66,7 @@
   </footer>
 
   <script>
-    // Phones: each app runs at a real 390px phone width, scaled to fit the screen.
+    // Phones: each app runs at a real 375px phone width, scaled to fit the screen.
     function fit() {
       const wide = innerWidth > 900;
       document.querySelectorAll('.demo-col').forEach((col) => {
@@ -80,10 +81,10 @@
       });
       document.querySelectorAll('.screen').forEach((sc) => {
         const f = sc.querySelector('iframe');
-        const s = sc.clientWidth / 390;
+        const s = sc.clientWidth / 375;
         sc.querySelector('.status').style.transform = `scale(${s})`;
         f.style.top = `${44 * s}px`;
-        f.style.width = '390px';
+        f.style.width = '375px';
         f.style.height = `${(sc.clientHeight - 44 * s) / s}px`;
         f.style.transform = `scale(${s})`;
       });
@@ -101,7 +102,12 @@
         if (!j.ok) alert(j.error || 'Something went wrong.');
       } catch { alert('Lost connection to the Detour server.'); }
     }
-    $('d-reset').onclick = () => post('/api/reset');
+    // Reset: the server goes back to the start, and both phones start again from their first screen.
+    $('d-reset').onclick = async () => {
+      await post('/api/reset');
+      try { localStorage.removeItem('detour.demo.manager'); localStorage.removeItem('detour.demo.traveller'); } catch {}
+      document.querySelectorAll('iframe').forEach((f) => { f.src = f.src; });
+    };
     $('d-next').onclick = () => post('/api/step');
     $('d-play').onclick = () => post('/api/run');
     document.addEventListener('keydown', (e) => {
@@ -109,19 +115,38 @@
       if (e.key === 'n' || e.key === 'N') $('d-next').click();
       if (e.key === 'p' || e.key === 'P') $('d-play').click();
     });
+    // Set-up first (by hand, on the phones), then the trip itself.
+    const SETUP = [
+      ['Step 1 of 3', "Sam adds Ada's trip", "On Sam's phone: open the demo company (or create one), go to Trips and add Ada's trip."],
+      ['Step 2 of 3', 'Ada opens her invite', "On Ada's phone: tap the invite email from Sam, then finish registering."],
+      ['Step 3 of 3', 'Start the trip', 'Ada is set up and Detour is watching her flights. Press Next event to start.'],
+    ];
     function update(s) {
       const p = s.progress;
-      $('d-scene').textContent = s.scene ? s.scene.name : 'Ready';
-      const doing = s.activity ? `${s.activity}…` : p.waiting ? `Waiting for ${s.manager} to decide on the left phone` : '';
-      $('d-text').textContent = doing || (s.scene ? s.scene.text : 'Ada flies Singapore to London via Frankfurt. Press Next event.');
-      $('d-text').className = doing ? 'activity' : '';
+      const a = s.account || { invites: [] };
+      const ada = a.invites.find((i) => i.live);
+      const setup = !a.liveReady ? (ada ? 1 : 0) : p.at === 0 ? 2 : -1;
+      if (setup >= 0) {
+        const [step, title, text] = SETUP[setup];
+        $('d-step').hidden = false;
+        $('d-step').textContent = step;
+        $('d-scene').textContent = title;
+        $('d-text').textContent = text;
+        $('d-text').className = '';
+      } else {
+        $('d-step').hidden = true;
+        $('d-scene').textContent = s.scene ? s.scene.name : 'Ready';
+        const doing = s.activity ? `${s.activity}…` : p.waiting ? `Waiting for ${s.manager} to decide on the left phone` : '';
+        $('d-text').textContent = doing || (s.scene ? s.scene.text : 'Press Next event.');
+        $('d-text').className = doing ? 'activity' : '';
+      }
       $('d-fill').style.width = `${Math.round((p.at / p.total) * 100)}%`;
-      $('d-count').textContent = `${p.at} / ${p.total}`;
-      const blocked = s.busy || s.playing || p.finished || p.waiting;
+      $('d-count').textContent = a.liveReady ? `${p.at} / ${p.total}` : 'Set-up';
+      const blocked = !a.liveReady || s.busy || s.playing || p.finished || p.waiting;
       $('d-next').disabled = blocked;
       $('d-play').disabled = blocked;
       $('d-reset').disabled = s.busy || s.playing;
-      $('d-next').firstChild.textContent = p.finished ? 'Story complete ' : p.waiting ? 'Needs approval ' : 'Next event ';
+      $('d-next').firstChild.textContent = !a.liveReady ? 'Set up Ada first ' : p.finished ? 'Story complete ' : p.waiting ? 'Needs approval ' : p.at === 0 ? 'Start the trip ' : 'Next event ';
     }
     if (new URLSearchParams(location.search).has('snapshot')) {
       document.querySelectorAll('iframe').forEach((f) => { f.src += '&snapshot'; });

@@ -4,7 +4,8 @@ let S = null;        // live state from the server
 let INV = null;      // this traveller's invite (trip, company, registration)
 let seenDetour = 0;  // Detour messages already seen, for the unread count
 let lastChatCount = -1;
-const KEY = 'detour.traveller';
+// Inside the demo page the phones keep their own sign-in, so Reset can start them from the beginning.
+const KEY = EMBED ? 'detour.demo.traveller' : 'detour.traveller';
 try { localStorage.setItem('detour.role', 'traveller'); } catch {}
 
 const session = {
@@ -17,7 +18,6 @@ const firstName = () => (INV?.registration?.name || INV?.name || '').split(' ')[
 
 // ---------------------------------------------------------------- start
 async function start() {
-  if (EMBED) return enter(await find({ token: 'ada-demo' }), { skipOnboarding: true });
   const token = params.get('invite');
   if (token) {
     history.replaceState(null, '', '/traveller');
@@ -40,14 +40,14 @@ async function find(q, quiet = false) {
   return j.result;
 }
 
-function enter(inv, { skipOnboarding = false } = {}) {
+function enter(inv) {
   if (!inv) return go('signin', { replace: true });
   INV = inv;
   if (inv.expired) {
     $('x-lede').textContent = `Ask ${inv.manager || 'your travel manager'} to send a new one.`;
     return go('expired', { replace: true });
   }
-  if (inv.registration || skipOnboarding) {
+  if (inv.registration) {
     session.set({ token: inv.token, email: inv.email });
     showMain();
     return;
@@ -63,6 +63,16 @@ function showMain() {
 }
 
 // ---------------------------------------------------------------- sign in
+// On the demo page, Ada's invite email arrives on her phone the moment Sam sends it.
+function renderInviteMail() {
+  const el = $('invite-mail');
+  const inv = EMBED && S?.account?.invites.find((i) => i.live && !i.registered);
+  el.hidden = !inv;
+  if (!inv) return;
+  el.innerHTML = `<span class="badge">${icon('mail')}</span><div class="grow"><b>Your trip on Detour</b><small>${esc(S.account.company.manager)} · ${esc(S.account.company.name)} · Tap to open your invite</small></div>${icon('chev-r', 'chev')}`;
+  el.onclick = async () => { const found = await find({ token: inv.token }); if (found) enter(found); };
+}
+
 $('signin-form').onsubmit = async (e) => {
   e.preventDefault();
   const email = $('signin-email').value.trim();
@@ -129,10 +139,10 @@ function flightCard(ls) {
 function render(s) {
   const before = S;
   S = s;
-  if (!INV) return;
-  if (INV.live && s.account) {
-    const mine = s.account.invites.find((i) => i.token === INV.token);
-    if (!mine && !EMBED) { session.clear(); INV = null; $('top-actions').hidden = true; go('signin', { replace: true }); return; }
+  if (!INV) { renderInviteMail(); return; }
+  if (s.account && !s.account.invites.some((i) => i.token === INV.token)) {
+    // The trip was removed (the demo was reset): back to the start.
+    session.clear(); INV = null; $('top-actions').hidden = true; go('signin', { replace: true }); renderInviteMail(); return;
   }
   $('top-avatar').innerHTML = live() ? '<img src="/img/app/ada.jpg" alt="">' : esc(initials(INV.name));
   $('top-avatar').classList.toggle('photo', live());

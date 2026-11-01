@@ -32,7 +32,6 @@ export class Accounts {
     Object.assign(this.policy.rules, seed.rules);
     for (const [code, c] of Object.entries(seed.cities)) Object.assign(this.policy.cities[code], c);
 
-    const t = this.scenario.traveller;
     this.company = {
       name: this.policy.company.replace(/\s*\(.*\)/, ''),
       manager: this.policy.travel_manager,
@@ -42,26 +41,22 @@ export class Accounts {
       password: null,
       demo: true,
     };
-    const now = Date.now();
-    this.invites = [{
-      token: 'ada-demo',
-      name: `${t.first_name} ${t.last_name}`,
-      email: t.email,
-      role: t.role,
-      flights: this.scenario.legs.map((id) => {
-        const f = this.scenario.flights[id];
-        return { id: f.id, from: f.from, to: f.to, dep: f.sched_dep, arr: f.sched_arr };
-      }),
-      live: true,
-      createdAt: now,
-      expiresAt: now + INVITE_DAYS * 864e5,
-    }];
+    // No trips yet: the demo starts with the travel manager adding Ada's trip.
+    this.invites = [];
     this.registrations = new Map();
+  }
+
+  // The scripted disruption follows the scenario's traveller, so it can start once she is invited and registered.
+  liveReady() {
+    const inv = this.invites.find((i) => i.live);
+    return Boolean(inv && this.registrations.has(inv.email));
   }
 
   view() {
     const { password, ...company } = this.company;
     return {
+      liveReady: this.liveReady(),
+      liveEmail: this.scenario.traveller.email,
       company,
       invites: this.invites.map((i) => ({ ...i, registered: this.registrations.has(i.email) })),
     };
@@ -142,8 +137,13 @@ export class Accounts {
       if (!AIRPORT.test(f.from) || !AIRPORT.test(f.to)) throw new Error(`Flight ${i + 1}: use three-letter airport codes like FRA.`);
       if (!f.dep) throw new Error(`Flight ${i + 1}: add the departure date and time.`);
     });
+    // The scenario's traveller gets the scenario's itinerary, because the scripted flight feed follows those flights.
+    const live = email === this.scenario.traveller.email.toLowerCase();
+    const trip = live
+      ? this.scenario.legs.map((id) => { const f = this.scenario.flights[id]; return { id: f.id, from: f.from, to: f.to, dep: f.sched_dep, arr: f.sched_arr }; })
+      : flights;
     const now = Date.now();
-    const inv = { token: randomBytes(9).toString('base64url'), name, email, role: clean(b.role, 60) || 'Traveller', flights, live: false, createdAt: now, expiresAt: now + INVITE_DAYS * 864e5 };
+    const inv = { token: randomBytes(9).toString('base64url'), name, email, role: clean(b.role, 60) || 'Traveller', flights: trip, live, createdAt: now, expiresAt: now + INVITE_DAYS * 864e5 };
     this.invites.push(inv);
     return { ...inv, registered: false };
   }

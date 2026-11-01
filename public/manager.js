@@ -4,7 +4,8 @@ let S = null;
 let openApproval = null;
 let openTrip = null;
 let logFilter = 'all';
-const KEY = 'detour.manager';
+// Inside the demo page the phones keep their own sign-in, so Reset can start them from the beginning.
+const KEY = EMBED ? 'detour.demo.manager' : 'detour.manager';
 try { localStorage.setItem('detour.role', 'manager'); } catch {}
 const session = {
   get() { try { return localStorage.getItem(KEY); } catch { return null; } },
@@ -13,6 +14,7 @@ const session = {
 };
 
 const traveller = () => S.traveller.name;
+const liveInvite = () => S.account?.invites.find((i) => i.live);
 const first = () => traveller().split(' ')[0];
 const mgr = () => S.account?.company.manager || S.manager;
 const tzOf = (code) => AIRPORTS[code]?.[3] || 'UTC';
@@ -26,7 +28,7 @@ function showMain() {
   if (S) render(S);
 }
 function start() {
-  if (EMBED || session.get()) return showMain();
+  if (session.get()) return showMain();
   go('start', { replace: true });
 }
 
@@ -191,7 +193,7 @@ function renderHome(pending) {
   const h = Number(fmt(S.clock, S.tz, { hour: '2-digit' }));
   $('h-hello').innerHTML = `${h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}, ${esc(mgr().split(' ')[0])} 👋`;
   const invites = (S.account?.invites || []).filter((i) => !i.live);
-  const trips = 1 + (S.otherTrips || []).length + invites.length;
+  const trips = (liveInvite() ? 1 : 0) + (S.otherTrips || []).length + invites.length;
   const disrupted = S.disruption && !S.disruption.closed && !S.summary ? 1 : 0;
   const pay = S.payments || [];
   const cur = S.card?.controls.currency || S.account?.company.currency || 'EUR';
@@ -205,13 +207,17 @@ function renderHome(pending) {
     <button class="tile" data-go="payments">${icon('wallet', 'c-purple')}<b>${money(sent, cur)}</b><span>Paid out</span><em class="c-purple">${sched ? `${money(sched, cur)} scheduled` : 'Nothing scheduled'}</em></button>`;
   $('h-decisions').innerHTML = pending.map((a) => `
     <button class="banner warn" data-approval="${a.id}"><span class="badge">${icon('bang')}</span><div class="grow"><b>Decision required</b><small>${esc(first())} · ${a.kind === 'nights' ? `night ${a.to.nights} in ${esc(a.to.city)}` : esc(approvalTitle(a))} · +${money(a.delta, a.to.currency)}</small></div>${icon('chev-r', 'chev')}</button>`).join('');
-  $('h-trips').innerHTML = liveTripCard() + (S.otherTrips || []).slice(0, 2).map(otherTripCard).join('');
+  const live = liveInvite();
+  $('h-trips').innerHTML = (live ? (live.registered ? liveTripCard() : inviteCard(live)) : noTripCard()) + (S.otherTrips || []).slice(0, 2).map(otherTripCard).join('');
 }
 
 function liveTripCard() {
   const c = S.card;
   const extra = c && S.mode === 'transfer' ? `<small>${icon('shield', 'c-green')} Covered until ${esc(dayHm(c.controls.activeTo, S.tz))}</small>` : '';
   return `<div class="card"><button class="row tap" data-trip="live">${ADA}<div class="grow"><b>${esc(traveller())}<span class="tag">Traveller</span></b><small>${esc(S.traveller.role)}</small><small style="color:var(--text);margin-top:6px">${icon('plane', 'c-cyan')} ${esc(liveRoute())}</small>${extra}</div><div class="end">${tripStatus()}</div></button></div>`;
+}
+function noTripCard() {
+  return `<div class="card"><button class="row tap" data-go="invite"><span class="ic">${icon('user-plus')}</span><div class="grow"><b>Add your first trip</b><small>Invite a traveller by email. Detour starts watching their flights.</small></div>${icon('chev-r', 'chev')}</button></div>`;
 }
 function otherTripCard(t) {
   return `<div class="card"><div class="row"><span class="avatar md">${esc(initials(t.name))}</span><div class="grow"><b>${esc(t.name)}</b><small>${esc(t.role)} · ${esc(t.flight)} ${esc(t.when)}</small><small style="color:var(--text);margin-top:6px">${icon('plane', 'c-cyan')} ${esc(t.route)}</small></div><div class="end"><span class="pill ok">On track</span></div></div></div>`;
@@ -283,7 +289,8 @@ document.addEventListener('click', async (e) => {
 // ---------------------------------------------------------------- trips
 function renderTrips() {
   const invites = (S.account?.invites || []).filter((i) => !i.live);
-  $('t-list').innerHTML = liveTripCard() + invites.slice().reverse().map(inviteCard).join('') + (S.otherTrips || []).map(otherTripCard).join('');
+  const live = liveInvite();
+  $('t-list').innerHTML = (live ? (live.registered ? liveTripCard() : inviteCard(live)) : '') + invites.slice().reverse().map(inviteCard).join('') + (S.otherTrips || []).map(otherTripCard).join('');
 }
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-trip]');
@@ -332,7 +339,20 @@ $('inv-add').onclick = addFlightRow;
 $('inv-flights').addEventListener('click', (e) => { if (e.target.closest('[data-remove]')) e.target.closest('[data-flight]').remove(); });
 onView('invite', () => {
   if (!$('inv-flights').children.length) addFlightRow();
+  $('inv-demo').hidden = !EMBED || Boolean(liveInvite());
 });
+// Demo page: fill in Ada's real itinerary (the one the scripted flight feed follows).
+$('inv-demo').onclick = () => {
+  $('inv-name').value = 'Ada Lim';
+  $('inv-email').value = S.account.liveEmail;
+  $('inv-role').value = S.traveller.role;
+  $('inv-flights').innerHTML = '';
+  S.account.liveEmail && [['DA779', 'SIN', 'FRA', '2026-11-05', '12:30'], ['DA908', 'FRA', 'LHR', '2026-11-05', '19:50']].forEach(([id, from, to, date, time]) => {
+    addFlightRow();
+    const row = $('inv-flights').lastElementChild;
+    Object.entries({ id, from, to, date, time }).forEach(([k, v]) => { row.querySelector(`[name=${k}]`).value = v; });
+  });
+};
 // Local departure time at the airport → UTC
 function localToUtc(date, time, tz) {
   const [y, mo, d] = date.split('-').map(Number);
