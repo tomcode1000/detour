@@ -5,6 +5,7 @@
 import * as rules from './rules.js';
 import { parseTime } from './time.js';
 import { fmtMoney, DECLINE_WORDS, describePayments } from './agent/words.js';
+import { claimFor } from './claims.js';
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -42,6 +43,7 @@ export class Engine {
     this.log = [];
     this.scene = null;
     this.summary = null;
+    this.claim = null;
     this.waiting = false;
     this.busy = false;
     this.playing = false;
@@ -555,6 +557,29 @@ export class Engine {
     if (this.card) await this.notify({ type: 'closed', spent: this.summary.spent, currency: this.summary.currency });
   }
 
+  // After a disruption, what the airline owes: compensation for the traveller, and the
+  // care costs (meals, transport, hotel) back to the company that paid them.
+  prepareClaim(care) {
+    if (!this.disruption || !this.scenario.airline) return;
+    const t = this.scenario.traveller;
+    this.claim = claimFor({
+      airline: this.scenario.airline,
+      traveller: `${t.first_name} ${t.last_name}`,
+      company: this.policy.company,
+      booked: this.scenario.legs.map((id) => this.normalFlight(this.scenario.flights[id])),
+      flown: this.legs.map((id) => this.flights[id]),
+      care,
+    });
+    const c = this.claim;
+    if (!c.eligible) return this.record('agent', `Airline claim: none. ${c.reason || ''}`.trim());
+    this.record('agent', `Airline claim prepared under ${c.scheme}: ${fmtMoney(c.compensation.amount, c.compensation.currency)} compensation for ${c.compensation.owedTo} (${c.compensation.why}); ${fmtMoney(c.care.total, c.care.currency)} care costs back to ${c.care.owedTo}.`);
+  }
+
+  claimNotice() {
+    const c = this.claim;
+    return c?.eligible ? { airline: c.airline, scheme: c.scheme, compensation: c.compensation.amount, compCurrency: c.compensation.currency, care: c.care.total, careCurrency: c.care.currency } : null;
+  }
+
   closeOutTransfers() {
     const ledger = this.funding.ledger();
     const sum = (rows) => Math.round(rows.reduce((s, l) => s + l.amount, 0) * 100) / 100;
@@ -573,7 +598,9 @@ export class Engine {
     };
     const s = this.summary;
     this.record('money', `Trip over. Sent ${fmtMoney(s.toTraveller, s.currency)} to Ada and ${fmtMoney(s.toHotel, s.currency)} to the hotel; ${fmtMoney(s.cancelled, s.currency)} was never paid out.`);
-    if (this.card) return this.notify({ type: 'closed', summary: s });
+    const care = sent.filter((l) => /^(meals|transport|hotel)/.test(l.key)).map((l) => ({ what: l.what, amount: l.amount, currency: l.currency }));
+    this.prepareClaim(care);
+    if (this.card) return this.notify({ type: 'closed', summary: s, claim: this.claimNotice() });
   }
 
   // ---------------------------------------------------------------- what the page sees
@@ -611,6 +638,7 @@ export class Engine {
       inbox: this.inbox,
       log: this.log,
       summary: this.summary,
+      claim: this.claim,
       busy: this.busy,
       playing: this.playing,
       activity: this.activity,

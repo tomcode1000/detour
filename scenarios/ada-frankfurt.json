@@ -17,6 +17,7 @@
     { "name": "Maria Costa", "role": "Solutions engineer", "route": "Lisbon → New York", "flight": "DA284", "when": "Fri 10:40" },
     { "name": "Tomás Reyes", "role": "Field engineer", "route": "Madrid → Singapore", "flight": "DA415", "when": "Sat 21:55" }
   ],
+  "airline": { "name": "Demo Air", "code": "DA", "region": "EU", "claims_email": "claims@demoair.example" },
   "start": "2026-11-05T03:30:00Z",
   "flights": {
     "DA779": { "id": "DA779", "from": "SIN", "to": "FRA", "sched_dep": "2026-11-05T04:30:00Z", "sched_arr": "2026-11-05T16:45:00Z", "status": "SCHEDULED" },

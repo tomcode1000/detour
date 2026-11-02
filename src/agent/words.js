@@ -78,7 +78,9 @@ function describeTransferNotice(notice, policy) {
     case 'expired': return `You're on your way. ${did}`.trim();
     case 'closed': {
       const s = notice.summary;
-      return `You've landed. In total Detour sent you ${fmtMoney(s.toTraveller, s.currency)} and paid the hotel ${fmtMoney(s.toHotel, s.currency)} directly. Nothing to claim, no receipts.`;
+      const c = notice.claim;
+      const claim = c ? ` One more thing: under ${c.scheme}, ${c.airline} likely owes you ${fmtMoney(c.compensation, c.compCurrency)} for arriving this late. I've written the claim for you - it's in your Trips tab.` : '';
+      return `You've landed. In total Detour sent you ${fmtMoney(s.toTraveller, s.currency)} and paid the hotel ${fmtMoney(s.toHotel, s.currency)}. No receipts to collect.${claim}`;
     }
     default: return notice.text || '';
   }

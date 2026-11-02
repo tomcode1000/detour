@@ -148,6 +148,7 @@ function render(s) {
   $('top-avatar').classList.toggle('photo', live());
   renderHome();
   renderTrips();
+  renderClaim(live() ? S.claim : null);
   renderChat();
   renderMore();
   renderSheetInbox();
@@ -349,6 +350,7 @@ function renderTrips() {
   if (currentView === 'trips') drawTripMap();
   $('t-legs').innerHTML = ls.map((f) => `<div class="row"><span class="ic plain">${icon('plane')}</span><div class="grow"><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>Departs ${esc(dateHm(f.dep, tzOf(f.from)))} ${esc(city(f.from))} time</small></div>${flightPill(f)}</div>`).join('');
 
+  $('t-claim').innerHTML = live() ? claimRow(S.claim) : '';
   const c = live() ? S?.card : null;
   if (c && S.mode === 'transfer') {
     const pays = S.payments || [];

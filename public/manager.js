@@ -127,6 +127,7 @@ function render(s) {
   if (openTrip) renderTrip();
   renderMore();
   renderPayments();
+  renderClaim(S.claim);
   renderPolicy();
   renderLog();
   if (before && !$('top-actions').hidden) momentsFor(before, s);
@@ -319,6 +320,7 @@ function renderTrip() {
   const state = (l) => (l.status === 'LANDED' || l.status === 'DEPARTED' ? 'done' : l.status === 'CANCELLED' || d?.missedFlight === l.id ? 'broken' : 'next');
   if (currentView === 'trip') drawRoute($('tr-map'), legs.map((l) => ({ from: l.from, to: l.to, state: state(l) })), { stay });
   $('tr-legs').innerHTML = legs.map((f) => `<div class="row"><span class="ic plain">${icon('plane')}</span><div class="grow"><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>Departs ${esc(dateHm(f.dep, tzOf(f.from)))}</small></div>${state(f) === 'broken' ? '<span class="pill bad">Disrupted</span>' : state(f) === 'done' ? '<span class="pill plain">Flown</span>' : '<span class="pill ok">Scheduled</span>'}</div>`).join('');
+  $('tr-claim').innerHTML = openTrip === 'live' ? claimRow(S.claim) : '';
   $('tr-last').innerHTML = last;
 }
 onView('trip', () => renderTrip());
@@ -416,6 +418,7 @@ function renderPayments() {
     ['doc', 'Fees', sum(sent, (l) => l.fee || 0)],
   ].map(([ic, k, v]) => `<div class="tile">${icon(ic, 'c-cyan')}<b style="font-size:17px">${money(v, cur)}</b><span style="font-size:12.5px">${k}</span></div>`).join('');
   $('p-card').innerHTML = S.hotelCard ? hotelCardHtml(S.hotelCard, cur) : '';
+  $('p-claim').innerHTML = claimRow(S.claim);
   if (S.mode !== 'transfer') {
     $('p-list').innerHTML = S.transactions.length ? S.transactions.slice().reverse().map((t) => `<div class="row ${t.status === 'APPROVED' ? '' : 'off'}"><span class="ic">${icon('card')}</span><div class="grow"><b>${esc(t.merchant)}</b><small>${esc(dayHm(t.at, S.tz))} · ${t.status === 'APPROVED' ? 'Approved' : esc(t.reason)}</small></div><div class="end"><b>${money(t.amount, t.currency)}</b></div></div>`).join('') : '<div class="empty">No card payments yet.</div>';
     return;

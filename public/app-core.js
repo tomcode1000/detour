@@ -111,6 +111,37 @@ document.querySelectorAll('[data-logo]').forEach((el) => { el.insertAdjacentHTML
 
 // ---------------------------------------------------------------- toast and API
 let toastTimer;
+// ---------------------------------------------------------------- airline claim (both apps)
+// The row that opens the claim, and the claim page itself: what is owed, to whom, and the letter.
+function claimRow(c) {
+  if (!c?.eligible) return '';
+  const parts = [];
+  if (c.compensation.amount) parts.push(`${money(c.compensation.amount, c.compensation.currency, { maximumFractionDigits: 0 })} for ${c.compensation.owedTo.split(' ')[0]}`);
+  if (c.care.total) parts.push(`${money(c.care.total, c.care.currency, { maximumFractionDigits: 0 })} back to ${c.care.owedTo.replace(/\s*\(.*\)$/, '')}`);
+  return `<div class="section-head"><h2>Airline claim</h2></div><div class="card"><button class="row tap" data-go="claim"><span class="ic green">${icon('doc')}</span><div class="grow"><b>Claim from ${esc(c.airline)}</b><small>${esc(parts.join(' · '))}</small></div><span class="pill ok">Ready</span>${icon('chev-r', 'chev')}</button></div>`;
+}
+
+function renderClaim(c) {
+  const el = $('claim-body');
+  if (!c?.eligible) { el.innerHTML = '<div class="empty">No claim yet. Detour prepares one when a disrupted trip ends.</div>'; return; }
+  const company = c.care.owedTo.replace(/\s*\(.*\)$/, '');
+  const rows = [];
+  if (c.compensation.amount) rows.push(`<div class="row"><span class="ic green">${icon('wallet')}</span><div class="grow"><b>Compensation</b><small>For ${esc(c.compensation.owedTo)} · ${esc(c.compensation.why)}</small></div><div class="end"><b>${money(c.compensation.amount, c.compensation.currency)}</b></div></div>`);
+  if (c.care.total) rows.push(`<div class="row"><span class="ic purple">${icon('bed')}</span><div class="grow"><b>Meals, taxis and hotel</b><small>Back to ${esc(company)} · paid while stranded</small></div><div class="end"><b>${money(c.care.total, c.care.currency)}</b></div></div>`);
+  el.innerHTML = `
+    <div class="page-head"><h1 class="title">Claim from ${esc(c.airline)}</h1><p class="sub">${esc(c.from)} → ${esc(c.to)} arrived ${esc(c.delayText)} late. Written under ${esc(c.scheme)}.</p></div>
+    <div class="card">${rows.join('')}</div>
+    <div class="section-head"><h2>Letter to the airline</h2></div>
+    <div class="card pad"><pre class="letter">${esc(c.letter)}</pre></div>
+    ${c.caveats.map((t, i) => `<div class="note">${icon(i ? 'shield-o' : 'warn')}<span>${esc(t)}</span></div>`).join('')}
+    <div class="btn-row"><button class="btn ghost" id="claim-copy">${icon('doc')}Copy letter</button><a class="btn primary" id="claim-mail">${icon('mail')}Email airline</a></div>`;
+  const [subject, , ...body] = c.letter.split('\n').slice(1);
+  $('claim-mail').href = `mailto:${encodeURIComponent(c.claimsEmail || '')}?subject=${encodeURIComponent(subject.replace(/^Subject: /, ''))}&body=${encodeURIComponent(body.join('\n'))}`;
+  $('claim-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(c.letter); toast('Letter copied.'); } catch { toast('Select the letter to copy it.'); }
+  };
+}
+
 function toast(text) {
   const t = $('toast');
   if (!t) return;
