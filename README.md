@@ -27,7 +27,7 @@ The phone app is a Progressive Web App (manifest, icons, service worker): on And
 
 ### The flow
 
-1. The travel manager signs up the company (or opens the demo company) and adds a trip: the traveller's name, email and flights. Detour checks the airport codes, that no flight is in the past, and that connecting flights link up (each leaves from where the last one landed, after it). It does not yet check that a flight number really flies that day: a live version would ask a flight-status service (FlightAware, Cirium, AeroDataBox) and then follow the flights through it, in place of the scripted feed.
+1. The travel manager signs up the company (or opens the demo company) and adds a trip: the traveller's name, email and flights. Detour checks the airport codes, that no flight is in the past, that flights are in time order, and that connections link up: flights less than a day apart must leave from where the last one landed, while a longer gap is a stay, so a return days later or a flight home from another city is fine. It does not yet check that a flight number really flies that day: a live version would ask a flight-status service (FlightAware, Cirium, AeroDataBox) and then follow the flights through it, in place of the scripted feed.
 2. Detour makes an invite link and QR code. The manager can send it again (a fresh link) or remove the trip.
 3. The traveller opens Detour with that email and checks the trip. If the flights are not theirs, they tap "This isn't my trip" and the manager is told. Otherwise they add a mobile number and the bank account for allowances (only the last four digits are kept), and sees the route on a map.
 4. When a flight is disrupted, money moves on its own within policy. Anything over policy waits for the manager's approval.

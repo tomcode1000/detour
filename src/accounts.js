@@ -11,8 +11,10 @@ const INVITE_DAYS = 14;
 const DAY = 864e5;
 
 // What Detour can check without a flight-status service: real airport codes, a departure that is
-// not in the past, and flights that connect (each one leaves from where the last one landed, after
-// it left). A live version would also ask a flight-status service that the flight exists on that date.
+// not in the past, flights in time order, and connections that link up. Flights less than 24 hours
+// apart are a connection, so the next one must leave from where the last one landed. A longer gap is
+// a stay (a return days later, or home from another city), so it may leave from anywhere.
+// A live version would also ask a flight-status service that each flight exists on that date.
 export function checkFlights(flights, now = Date.now()) {
   flights.forEach((f, i) => {
     const n = flights.length > 1 ? `Flight ${i + 1}: ` : '';
@@ -25,9 +27,9 @@ export function checkFlights(flights, now = Date.now()) {
     if (f.arr && Date.parse(f.arr) <= Date.parse(f.dep)) throw new Error(`${n}it lands before it leaves. Check the times.`);
     const prev = flights[i - 1];
     if (!prev) return;
-    if (prev.to !== f.from) throw new Error(`Flight ${i + 1} leaves from ${f.from}, but flight ${i} lands at ${prev.to}. Connecting flights must link up.`);
-    if (Date.parse(f.dep) <= Date.parse(prev.arr || prev.dep)) throw new Error(`Flight ${i + 1} leaves before flight ${i}${prev.arr ? ' lands' : ' leaves'}. Check the dates and times.`);
-    if (Date.parse(f.dep) - Date.parse(prev.dep) > 3 * DAY) throw new Error(`Flight ${i + 1} leaves more than 3 days after flight ${i}. Add it as a separate trip.`);
+    const gap = Date.parse(f.dep) - Date.parse(prev.arr || prev.dep);
+    if (gap <= 0) throw new Error(`Flight ${i + 1} leaves before flight ${i}${prev.arr ? ' lands' : ' leaves'}. Check the dates and times.`);
+    if (gap < DAY && prev.to !== f.from) throw new Error(`Flight ${i + 1} leaves from ${f.from} less than a day after flight ${i} lands at ${prev.to}. A connection has to leave from the airport you landed at.`);
   });
 }
 

@@ -95,16 +95,18 @@ test('an invite can be sent again with a fresh link, or removed with its registr
   assert.equal(accounts.registrations.size, 0);
 });
 
-test('flights are checked: real airports, not in the past, and connections that link up', () => {
+test('flights are checked: real airports, not in the past, connections link up, stays and returns are fine', () => {
   const now = Date.parse('2026-11-03T12:00:00Z');
   const leg = (id, from, to, dep, arr) => ({ id, from, to, dep, arr });
   assert.doesNotThrow(() => checkFlights([leg('SQ26', 'SIN', 'FRA', '2026-11-10T15:00:00Z', '2026-11-11T05:00:00Z'), leg('LH900', 'FRA', 'LHR', '2026-11-11T07:00:00Z')], now));
   assert.throws(() => checkFlights([leg('XX1', 'SIN', 'ZZZ', '2026-11-10T15:00:00Z')], now), /doesn't know the airport ZZZ/);
   assert.throws(() => checkFlights([leg('XX1', 'SIN', 'SIN', '2026-11-10T15:00:00Z')], now), /same airport/);
   assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-10-01T15:00:00Z')], now), /in the past/);
-  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z'), leg('XX2', 'MUC', 'LHR', '2026-11-11T07:00:00Z')], now), /must link up/);
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z'), leg('XX2', 'MUC', 'LHR', '2026-11-11T07:00:00Z')], now), /connection has to leave from the airport you landed at/);
   assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z', '2026-11-11T05:00:00Z'), leg('XX2', 'FRA', 'LHR', '2026-11-11T04:00:00Z')], now), /leaves before flight 1 lands/);
-  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z'), leg('XX2', 'FRA', 'LHR', '2026-11-20T07:00:00Z')], now), /separate trip/);
+  // A return days later, on another plane, is a normal trip; so is flying home from a different city.
+  assert.doesNotThrow(() => checkFlights([leg('SQ308', 'SIN', 'LHR', '2026-11-10T15:00:00Z', '2026-11-11T05:00:00Z'), leg('SQ317', 'LHR', 'SIN', '2026-11-14T11:00:00Z')], now));
+  assert.doesNotThrow(() => checkFlights([leg('XX1', 'SIN', 'LHR', '2026-11-10T15:00:00Z', '2026-11-11T05:00:00Z'), leg('XX2', 'CDG', 'SIN', '2026-11-15T11:00:00Z')], now));
 });
 
 test('the traveller can say the trip is not theirs, and the manager sees it', () => {
