@@ -80,3 +80,17 @@ test('invites need a real flight, and unknown or expired invites are refused', (
   assert.equal(accounts.find({ token: inv.token }).expired, true);
   assert.throws(() => accounts.register({ token: inv.token, phone: '+1 555 0100 222', bank: { holder: 'X', account: '12345678', code: 'X' } }), /expired/);
 });
+
+test('an invite can be sent again with a fresh link, or removed with its registration', () => {
+  const { accounts } = setup();
+  const inv = accounts.invite({ name: 'Lena Hart', email: 'lena@northwind.example', flights: [flight] });
+  const again = accounts.renew({ token: inv.token });
+  assert.notEqual(again.token, inv.token);
+  assert.throws(() => accounts.find({ token: inv.token }), /not valid/);
+  assert.equal(accounts.find({ token: again.token }).email, 'lena@northwind.example');
+  accounts.register({ token: again.token, phone: '+49 151 2345678', bank: { country: 'DE', holder: 'Lena Hart', account: '12345678', code: 'COBADEFF' } });
+  accounts.remove({ token: again.token });
+  assert.equal(accounts.view().invites.length, 0);
+  assert.throws(() => accounts.find({ email: 'lena@northwind.example' }), /no trip/);
+  assert.equal(accounts.registrations.size, 0);
+});

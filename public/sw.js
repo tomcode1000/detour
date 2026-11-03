@@ -1,6 +1,6 @@
 // Detour service worker: keeps the app shell available so the installed app opens instantly.
 // Live data (/api, /events) always goes to the network.
-const CACHE = 'detour-shell-v6';
+const CACHE = 'detour-shell-v7';
 const SHELL = [
   '/app', '/traveller', '/manager',
   '/app.css', '/app-core.js', '/traveller.js', '/manager.js', '/img/app/ada.jpg', '/img/app/hotel.jpg', '/img/app/company.jpg',
@@ -43,4 +43,13 @@ self.addEventListener('fetch', (e) => {
       })
       .catch(() => caches.match(url.pathname).then((hit) => hit || caches.match('/app'))),
   );
+});
+
+// Tapping a Detour notification brings the open app forward, or opens it.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+    const app = wins.find((w) => /\/(traveller|manager)/.test(new URL(w.url).pathname));
+    return app ? app.focus() : self.clients.openWindow('/app');
+  }));
 });

@@ -571,8 +571,20 @@ export class Engine {
       care,
     });
     const c = this.claim;
+    c.status = 'READY';
     if (!c.eligible) return this.record('agent', `Airline claim: none. ${c.reason || ''}`.trim());
     this.record('agent', `Airline claim prepared under ${c.scheme}: ${fmtMoney(c.compensation.amount, c.compensation.currency)} compensation for ${c.compensation.owedTo} (${c.compensation.why}); ${fmtMoney(c.care.total, c.care.currency)} care costs back to ${c.care.owedTo}.`);
+  }
+
+  // The manager tracks the claim: sent to the airline, then settled.
+  setClaimStatus(status) {
+    if (!this.claim?.eligible) throw new Error('There is no claim yet.');
+    if (!['READY', 'SENT', 'SETTLED'].includes(status)) throw new Error('Unknown claim status.');
+    this.claim.status = status;
+    this.claim[`${status.toLowerCase()}At`] = Date.now();
+    this.record('manager', status === 'SENT' ? `Claim sent to ${this.claim.airline}.` : status === 'SETTLED' ? `${this.claim.airline} settled the claim.` : 'Claim reopened.');
+    this.changed();
+    return this.claim;
   }
 
   claimNotice() {

@@ -118,10 +118,13 @@ function claimRow(c) {
   const parts = [];
   if (c.compensation.amount) parts.push(`${money(c.compensation.amount, c.compensation.currency, { maximumFractionDigits: 0 })} for ${c.compensation.owedTo.split(' ')[0]}`);
   if (c.care.total) parts.push(`${money(c.care.total, c.care.currency, { maximumFractionDigits: 0 })} back to ${c.care.owedTo.replace(/\s*\(.*\)$/, '')}`);
-  return `<div class="section-head"><h2>Airline claim</h2></div><div class="card"><button class="row tap" data-go="claim"><span class="ic green">${icon('doc')}</span><div class="grow"><b>Claim from ${esc(c.airline)}</b><small>${esc(parts.join(' · '))}</small></div><span class="pill ok">Ready</span>${icon('chev-r', 'chev')}</button></div>`;
+  return `<div class="section-head"><h2>Airline claim</h2></div><div class="card"><button class="row tap" data-go="claim"><span class="ic green">${icon('doc')}</span><div class="grow"><b>Claim from ${esc(c.airline)}</b><small>${esc(parts.join(' · '))}</small></div>${claimPill(c)}${icon('chev-r', 'chev')}</button></div>`;
 }
+const CLAIM_PILL = { READY: ['info', 'Ready to send'], SENT: ['warn', 'Sent'], SETTLED: ['ok', 'Settled'] };
+const claimPill = (c) => { const [cls, text] = CLAIM_PILL[c.status] || CLAIM_PILL.READY; return `<span class="pill ${cls}">${text}</span>`; };
 
-function renderClaim(c) {
+// manage: the travel manager can move the claim along (sent to the airline, then settled).
+function renderClaim(c, { manage = false } = {}) {
   const el = $('claim-body');
   if (!c?.eligible) { el.innerHTML = '<div class="empty">No claim yet. Detour prepares one when a disrupted trip ends.</div>'; return; }
   const company = c.care.owedTo.replace(/\s*\(.*\)$/, '');
@@ -130,16 +133,33 @@ function renderClaim(c) {
   if (c.care.total) rows.push(`<div class="row"><span class="ic purple">${icon('bed')}</span><div class="grow"><b>Meals, taxis and hotel</b><small>Back to ${esc(company)} · paid while stranded</small></div><div class="end"><b>${money(c.care.total, c.care.currency)}</b></div></div>`);
   el.innerHTML = `
     <div class="page-head"><h1 class="title">Claim from ${esc(c.airline)}</h1><p class="sub">${esc(c.from)} → ${esc(c.to)} arrived ${esc(c.delayText)} late. Written under ${esc(c.scheme)}.</p></div>
-    <div class="card">${rows.join('')}</div>
+    <div class="card">${rows.join('')}<div class="row"><span class="ic plain">${icon('clock')}</span><div class="grow"><b>Status</b><small>${c.status === 'SETTLED' ? `Settled ${esc(dateHm(c.settledAt, Intl.DateTimeFormat().resolvedOptions().timeZone))}` : c.status === 'SENT' ? `Sent ${esc(dateHm(c.sentAt, Intl.DateTimeFormat().resolvedOptions().timeZone))} · airlines usually reply within a few weeks` : 'Written, not sent yet'}</small></div>${claimPill(c)}</div></div>
+    ${manage && c.status !== 'SETTLED' ? `<button class="btn ghost block" id="claim-next">${icon('check')}${c.status === 'SENT' ? 'Mark as settled' : 'Mark as sent to the airline'}</button>` : ''}
     <div class="section-head"><h2>Letter to the airline</h2></div>
     <div class="card pad"><pre class="letter">${esc(c.letter)}</pre></div>
     ${c.caveats.map((t, i) => `<div class="note">${icon(i ? 'shield-o' : 'warn')}<span>${esc(t)}</span></div>`).join('')}
     <div class="btn-row"><button class="btn ghost" id="claim-copy">${icon('doc')}Copy letter</button><a class="btn primary" id="claim-mail">${icon('mail')}Email airline</a></div>`;
   const [subject, , ...body] = c.letter.split('\n').slice(1);
   $('claim-mail').href = `mailto:${encodeURIComponent(c.claimsEmail || '')}?subject=${encodeURIComponent(subject.replace(/^Subject: /, ''))}&body=${encodeURIComponent(body.join('\n'))}`;
+  if ($('claim-next')) {
+    $('claim-next').onclick = async () => {
+      const j = await api('/api/claim', { status: c.status === 'SENT' ? 'SETTLED' : 'SENT' });
+      if (j.ok) toast(c.status === 'SENT' ? 'Claim marked as settled.' : 'Claim marked as sent.');
+    };
+  }
   $('claim-copy').onclick = async () => {
     try { await navigator.clipboard.writeText(c.letter); toast('Letter copied.'); } catch { toast('Select the letter to copy it.'); }
   };
+}
+
+function hotelCardArt(c, { currency, holder }) {
+  const open = c.status === 'ACTIVE';
+  return `<div class="vcard ${open ? '' : 'closed'}" aria-label="Detour hotel card ending ${esc(c.last4 || '')}">
+    <div class="vcard-top"><span class="vcard-brand"><svg class="vcard-logo" viewBox="0 0 32 35"><use href="#logo"/></svg>Detour</span><span class="vcard-tag">${open ? 'Hotels only' : 'Closed'}</span></div>
+    <div class="vcard-chip"></div>
+    <div class="vcard-num">•••• •••• •••• ${esc(c.last4 || '----')}</div>
+    <div class="vcard-foot"><div><small>Card holder</small><b>${esc(holder)}</b></div><div><small>Up to</small><b>${money(c.limit, currency)}</b></div><div class="vcard-net">Airwallex</div></div>
+  </div>`;
 }
 
 function toast(text) {
@@ -216,8 +236,30 @@ document.addEventListener('click', (e) => {
 // ref, progress, primary: { label, go?, run? }, secondary: { label, go?, run? } }
 const momentQueue = [];
 let momentOpen = false;
+// ---------------------------------------------------------------- phone notifications
+// While the app is in the background, each moment is also shown as a phone notification.
+const canNotify = () => 'Notification' in window && 'serviceWorker' in navigator && !EMBED;
+function notifyPhone(title, body) {
+  if (!canNotify() || Notification.permission !== 'granted' || !document.hidden) return;
+  navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/favicon-32.png', tag: title })).catch(() => {});
+}
+function notifRow() {
+  if (!canNotify()) return '';
+  const p = Notification.permission;
+  const sub = p === 'granted' ? 'On · you are told even when Detour is closed' : p === 'denied' ? 'Blocked · allow them in your browser settings' : 'Get told the moment something happens';
+  return `<button class="row tap" data-notif ${p !== 'default' ? 'disabled' : ''}><span class="ic">${icon('bell')}</span><div class="grow"><b>Notifications</b><small>${sub}</small></div>${p === 'granted' ? '<span class="pill ok">On</span>' : p === 'denied' ? '<span class="pill plain">Off</span>' : '<span class="pill info">Turn on</span>'}</button>`;
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-notif]');
+  if (!b || !canNotify()) return;
+  const p = await Notification.requestPermission();
+  toast(p === 'granted' ? 'Notifications are on.' : 'Notifications are off.');
+  document.querySelectorAll('[data-notif]').forEach((el) => { el.outerHTML = notifRow(); });
+});
+
 function moment(m) {
   if (params.has('snapshot')) return;
+  notifyPhone(m.title, m.sub || '');
   momentQueue.push(m);
   if (!momentOpen) nextMoment();
 }

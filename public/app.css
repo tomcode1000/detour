@@ -83,6 +83,10 @@ h1.title { font-size: 24px; line-height: 1.2; font-weight: 600; letter-spacing: 
 .card.pad { padding: 14px 16px; }
 .row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; min-height: 64px; width: 100%; text-align: left; }
 .row + .row { border-top: 1px solid var(--line-2); }
+/* A slot holds a row that is drawn later; it keeps the row dividers as if the row were there. */
+.slot { display: contents; }
+.slot:not(:first-child) > .row, .slot + .row { border-top: 1px solid var(--line-2); }
+.slot:empty:first-child + .row { border-top: 0; }
 .row.tap { cursor: pointer; transition: background .15s; border-radius: var(--r); }
 .row.tap:hover { background: rgba(255, 255, 255, .025); }
 .row .grow { flex: 1; min-width: 0; }
@@ -122,6 +126,7 @@ h1.title { font-size: 24px; line-height: 1.2; font-weight: 600; letter-spacing: 
 .btn.primary { background: var(--cyan); color: var(--cyan-ink); }
 .btn.primary:hover { background: var(--cyan-hi); }
 .btn.ghost { border: 1px solid rgba(169, 191, 214, .55); color: var(--cyan); background: rgba(169, 191, 214, .05); }
+.btn.ghost.danger { border-color: rgba(255, 107, 107, .45); color: var(--red); background: rgba(255, 107, 107, .05); }
 .btn.quiet { color: var(--muted); height: 44px; }
 .btn.block { width: 100%; }
 .btn:disabled { opacity: .45; pointer-events: none; }
@@ -358,6 +363,20 @@ h1.title { font-size: 24px; line-height: 1.2; font-weight: 600; letter-spacing: 
 .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; display: inline-block; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty { padding: 26px 18px; text-align: center; color: var(--muted); font-size: 14px; }
+.vcard { position: relative; aspect-ratio: 1.586; border-radius: 18px; padding: 18px 20px; display: flex; flex-direction: column; color: #fff; overflow: hidden;
+  background: radial-gradient(120% 140% at 100% 0%, rgba(169, 191, 214, .38), transparent 55%), linear-gradient(135deg, #1b2a3a 0%, #0b141d 70%); border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 18px 40px rgba(0, 0, 0, .35); }
+.vcard.closed { filter: grayscale(1); opacity: .55; }
+.vcard-top { display: flex; justify-content: space-between; align-items: center; }
+.vcard-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; }
+.vcard-logo { width: 18px; height: 20px; }
+.vcard-tag { font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: rgba(169, 191, 214, .18); color: #a9bfd6; }
+.vcard-chip { width: 38px; height: 28px; border-radius: 6px; margin-top: 18px; background: linear-gradient(135deg, #d9e2ea, #8fa3b6); opacity: .85; }
+.vcard-num { margin-top: auto; font-size: 18px; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+.vcard-foot { display: flex; gap: 22px; align-items: flex-end; margin-top: 12px; }
+.vcard-foot small { display: block; font-size: 10.5px; color: rgba(255, 255, 255, .55); text-transform: uppercase; letter-spacing: .08em; }
+.vcard-foot b { font-size: 13.5px; font-weight: 600; }
+.vcard-net { margin-left: auto; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .7); }
+.row.tap[disabled] { cursor: default; }
 .letter { white-space: pre-wrap; word-break: break-word; font: 13px/1.55 Inter, system-ui, sans-serif; color: #c9d6e2; max-height: 340px; overflow-y: auto; }
 .fine { color: var(--dim); font-size: 12px; text-align: center; padding: 4px 10px; }
 

@@ -66,6 +66,13 @@ const actions = {
   'POST /api/signin': (b) => accounts.signin(b),
   'POST /api/policy': (b) => { const r = accounts.updatePolicy(b); broadcast(); return r; },
   'POST /api/invite': (b) => { const r = accounts.invite(b); broadcast(); return r; },
+  'POST /api/invite/renew': (b) => { const r = accounts.renew(b); broadcast(); return r; },
+  'POST /api/invite/remove': (b) => {
+    const inv = accounts.invites.find((i) => i.token === b.token);
+    if (inv?.live && engine.cursor > 0) throw new Error("Ada's trip is running in the demo. Use Reset on the demo page to start again.");
+    const r = accounts.remove(b); broadcast(); return r;
+  },
+  'POST /api/claim': (b) => engine.setClaimStatus(String(b.status || '')),
   'POST /api/traveller/find': (b) => accounts.find(b),
   'POST /api/traveller/register': (b) => { const r = accounts.register(b); broadcast(); return r; },
   'POST /api/airline-message': (b) => (b.text || b.inboxId ? engine.shareAirlineMessage({

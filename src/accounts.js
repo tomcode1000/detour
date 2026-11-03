@@ -148,6 +148,23 @@ export class Accounts {
     return { ...inv, registered: false };
   }
 
+  // A new link for an invite (the old one stops working), valid for another 14 days.
+  renew(b) {
+    const inv = this.invites.find((i) => i.token === clean(b.token, 40));
+    if (!inv) throw new Error('That trip no longer exists.');
+    inv.token = randomBytes(9).toString('base64url');
+    inv.expiresAt = Date.now() + INVITE_DAYS * 864e5;
+    return { ...inv, registered: this.registrations.has(inv.email) };
+  }
+
+  remove(b) {
+    const i = this.invites.findIndex((x) => x.token === clean(b.token, 40));
+    if (i < 0) throw new Error('That trip no longer exists.');
+    const [inv] = this.invites.splice(i, 1);
+    this.registrations.delete(inv.email);
+    return { removed: inv.email };
+  }
+
   find(b) {
     const token = clean(b.token, 40);
     const email = clean(b.email).toLowerCase();

@@ -319,6 +319,8 @@ function renderHome() {
     rows.push(`<button class="row tap" data-go="trips"><img class="thumb" src="/img/app/hotel.jpg" alt=""><div class="grow"><b>Hotel accommodation</b><small>${esc(name)} · ${hotel.length} night${hotel.length > 1 ? 's' : ''} paid</small></div>${icon('chev-r', 'chev')}</button>`);
   }
   $('h-rows').innerHTML = rows.map((r) => `<div class="card">${r}</div>`).join('');
+  const hc = live() && S?.hotelCard;
+  $('h-card').innerHTML = hc && hc.status === 'ACTIVE' ? `<div class="section-head"><h2>Your hotel card</h2></div>${hotelCardArt(hc, { currency: S.card?.controls.currency || 'EUR', holder: INV.registration?.name || INV.name })}` : '';
 
   // What's covered, while the disruption is open
   if (c && c.status === 'ACTIVE' && d && !d.closed && S.mode === 'transfer') {
@@ -333,7 +335,7 @@ function renderHome() {
       <div class="card">
         <div class="row"><span class="ic">${icon('meal')}</span><div class="grow"><b>Meals</b><small>${meals ? `${meals} day${meals > 1 ? 's' : ''} sent to your account` : 'Sent to your account each morning'}</small></div><div class="end"><b>${money(rates.meals_per_day, cur)}</b><small>per day</small></div></div>
         <div class="row"><span class="ic">${icon('car')}</span><div class="grow"><b>Taxis and transport</b><small>Sent to your account</small></div><div class="end"><b>${money(rates.transport, cur)}</b><small>per stay</small></div></div>
-        <div class="row"><span class="ic">${icon('bed')}</span><div class="grow"><b>Hotel</b><small>${nights ? `Paid directly · ${nights} night${nights > 1 ? 's' : ''}` : 'Added if you need to stay the night'}</small></div><div class="end"><b>${money(perNight, cur)}</b><small>per night</small></div></div>
+        <div class="row"><span class="ic">${icon('bed')}</span><div class="grow"><b>Hotel</b><small>${nights ? `${S.hotelCard ? 'On your hotel card' : 'Paid directly'} · ${nights} night${nights > 1 ? 's' : ''}` : 'Added if you need to stay the night'}</small></div><div class="end"><b>${money(perNight, cur)}</b><small>per night</small></div></div>
       </div>`;
   } else {
     $('h-covered').innerHTML = '';
@@ -355,7 +357,7 @@ function renderTrips() {
   if (c && S.mode === 'transfer') {
     const pays = S.payments || [];
     const hc = S.hotelCard;
-    const cardHtml = hc ? `<div class="section-head"><h2>Your hotel card</h2></div><div class="card"><div class="row"><span class="ic purple">${icon('card')}</span><div class="grow"><b>Virtual card ••${esc(hc.last4 || '----')}</b><small>Hotels only · up to ${esc(money(hc.limit, c.controls.currency))} · ${hc.status === 'ACTIVE' ? 'the hotel charges it at check-in' : 'closed when your trip ended'}</small></div><span class="pill ${hc.status === 'ACTIVE' ? 'ok' : 'plain'}">${hc.status === 'ACTIVE' ? 'Active' : 'Closed'}</span></div></div>` : '';
+    const cardHtml = hc ? `<div class="section-head"><h2>Your hotel card</h2></div>${hotelCardArt(hc, { currency: c.controls.currency, holder: INV.registration?.name || INV.name })}<p class="fine" style="margin-top:-4px">${hc.status === 'ACTIVE' ? 'Only hotels can charge it, up to the nights your company has approved. It closes when your trip ends.' : 'Closed when your trip ended. Nights you did not need were never charged.'}</p>` : '';
     $('t-cover').innerHTML = `${cardHtml}<div class="section-head"><h2>Payments for this stay</h2></div><div class="card">${pays.slice().reverse().map((l) => {
       const when = l.status === 'SENT' ? `Sent ${dayHm(l.payAt, S.tz)}` : l.status === 'SCHEDULED' ? `Due ${dayHm(l.payAt, S.tz)}` : 'Not needed';
       const pill = { SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill warn">Scheduled</span>', CANCELLED: '<span class="pill plain">Cancelled</span>', DECLINED: '<span class="pill bad">Declined</span>' }[l.status] || '';
@@ -439,7 +441,9 @@ $('composer').onsubmit = async (e) => {
 // ---------------------------------------------------------------- more
 function renderMore() {
   $('m-who').innerHTML = whoHtml();
+  $('m-notif').innerHTML = notifRow();
   const r = INV.registration;
+  $('m-edit').hidden = !r;
   if (!r) {
     $('m-details').innerHTML = `<div class="row"><span class="ic plain">${icon('mail')}</span><div class="grow"><small style="margin:0 0 2px">Email</small><b>${esc(INV.email)}</b></div></div>
       <button class="row tap" data-go="reg1"><span class="ic orange">${icon('bank')}</span><div class="grow"><b>Finish registration</b><small>Add your phone and the bank account for allowances</small></div>${icon('chev-r', 'chev')}</button>
@@ -455,6 +459,22 @@ function renderMore() {
   ];
   $('m-details').innerHTML = rows.map(([ic, k, v]) => `<div class="row"><span class="ic plain">${icon(ic)}</span><div class="grow"><small style="margin:0 0 2px">${esc(k)}</small><b>${esc(v)}</b></div></div>`).join('');
 }
+// Edit details: the registration screens again, filled in. The account number is typed again.
+let editing = false;
+$('m-edit').onclick = () => {
+  const r = INV.registration;
+  editing = true;
+  $('r-name').value = r.name || INV.name;
+  $('r-phone').value = r.phone || '';
+  $('r-cur').value = r.homeCurrency || 'SGD';
+  $('r-country').value = r.bank.country || 'SG';
+  $('r-holder').value = r.bank.holder || '';
+  $('r-code').value = r.bank.code || '';
+  $('r-account').value = '';
+  $('r-account').placeholder = `Type it again (ends ${r.bank.last4})`;
+  $('r-msgs').checked = r.messages !== false;
+  go('reg1');
+};
 $('m-signout').onclick = () => { session.clear(); INV = null; $('top-actions').hidden = true; go('signin', { replace: true }); };
 
 // ---------------------------------------------------------------- welcome and registration
@@ -495,11 +515,13 @@ $('reg2-form').onsubmit = async (e) => {
     messages: $('r-msgs').checked,
   }, { quiet: true });
   btn.disabled = false;
-  btn.textContent = 'Finish';
+  btn.textContent = editing ? 'Save' : 'Finish';
   if (!j.ok) { $('reg2-error').textContent = j.error; return; }
   INV.registration = j.result;
   session.set({ token: INV.token, email: INV.email });
   $('r-account').value = '';
+  $('r-account').placeholder = '1234567890';
+  if (editing) { editing = false; renderMore(); go('more', { replace: true }); toast('Your details are updated.'); return; }
   go('mapintro', { replace: true });
 };
 

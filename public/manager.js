@@ -127,7 +127,7 @@ function render(s) {
   if (openTrip) renderTrip();
   renderMore();
   renderPayments();
-  renderClaim(S.claim);
+  renderClaim(S.claim, { manage: true });
   renderPolicy();
   renderLog();
   if (before && !$('top-actions').hidden) momentsFor(before, s);
@@ -321,6 +321,10 @@ function renderTrip() {
   if (currentView === 'trip') drawRoute($('tr-map'), legs.map((l) => ({ from: l.from, to: l.to, state: state(l) })), { stay });
   $('tr-legs').innerHTML = legs.map((f) => `<div class="row"><span class="ic plain">${icon('plane')}</span><div class="grow"><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>Departs ${esc(dateHm(f.dep, tzOf(f.from)))}</small></div>${state(f) === 'broken' ? '<span class="pill bad">Disrupted</span>' : state(f) === 'done' ? '<span class="pill plain">Flown</span>' : '<span class="pill ok">Scheduled</span>'}</div>`).join('');
   $('tr-claim').innerHTML = openTrip === 'live' ? claimRow(S.claim) : '';
+  // Invites can be sent again (a fresh link) or removed. Ada's trip stays once the demo story is running.
+  const inv = openTrip === 'live' ? liveInvite() : (S.account?.invites || []).find((x) => x.token === openTrip);
+  const canRemove = inv && !(inv.live && S.progress.at > 0);
+  $('tr-actions').innerHTML = inv ? `<div class="btn-row">${inv.registered ? '' : `<button class="btn ghost" data-renew="${esc(inv.token)}">${icon('mail')}Send invite again</button>`}${canRemove ? `<button class="btn ghost danger" data-remove="${esc(inv.token)}">${icon('x')}Remove trip</button>` : ''}</div>` : '';
   $('tr-last').innerHTML = last;
 }
 onView('trip', () => renderTrip());
@@ -381,6 +385,20 @@ $('inv-form').onsubmit = async (e) => {
   e.target.reset();
   $('inv-flights').innerHTML = '';
 };
+document.addEventListener('click', async (e) => {
+  const renew = e.target.closest('[data-renew]');
+  const remove = e.target.closest('[data-remove]');
+  if (renew) {
+    const j = await api('/api/invite/renew', { token: renew.dataset.renew });
+    if (j.ok) { openTrip = null; showInvited(j.result); toast('New invite link made. The old one no longer works.'); }
+  } else if (remove) {
+    const inv = (S.account?.invites || []).find((x) => x.token === remove.dataset.remove);
+    if (!inv || !confirm(`Remove ${inv.name}'s trip? Detour stops watching their flights, and their invite link stops working.`)) return;
+    const j = await api('/api/invite/remove', { token: inv.token });
+    if (j.ok) { openTrip = null; toast(`${inv.name}'s trip removed.`); go('trips', { replace: true }); }
+  }
+});
+
 function showInvited(inv) {
   const link = `${location.origin}/traveller?invite=${inv.token}`;
   const firstName = inv.name.split(' ')[0];
@@ -401,6 +419,7 @@ function showInvited(inv) {
 function renderMore() {
   const c = S.account?.company;
   $('m-who').innerHTML = `<span class="avatar lg">${esc(initials(mgr()))}</span><div><b>${esc(mgr())}</b><small>Travel manager · ${esc(companyName(S))}</small><small>${esc(c?.email || '')}</small></div>`;
+  $('m-notif').innerHTML = notifRow();
   const liveMoney = S.adapters.fundingName.startsWith('airwallex');
   const liveAgent = S.adapters.agentName === 'deepseek';
   $('m-conn').innerHTML = `<div class="row"><span class="ic plain">${icon('bank')}</span><div class="grow"><b>Payments</b><small>${esc(S.adapters.funding)}</small></div><span class="pill ${liveMoney ? 'ok' : 'warn'}">${liveMoney ? 'Live' : 'Simulated'}</span></div>
