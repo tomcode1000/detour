@@ -198,6 +198,7 @@ export class Accounts {
     const token = clean(b.token, 40);
     const email = clean(b.email).toLowerCase();
     const inv = this.invites.find((i) => (token && i.token === token) || (email && i.email === email));
+    if (!inv && email === this.scenario.traveller.email.toLowerCase()) throw new Error(`Ada hasn't been invited yet. Open Detour as the travel manager and add her trip first: Trips, then Add a trip, then Use Ada's trip (demo).`);
     if (!inv) throw new Error(email ? `There is no trip for ${email} yet. Ask your travel manager to invite you.` : 'This invite link is not valid.');
     if (Date.now() > inv.expiresAt) return { ...inv, expired: true };
     return { ...inv, company: this.company.name, manager: this.company.manager, registration: this.registrations.get(inv.email) || null };

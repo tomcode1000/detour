@@ -28,6 +28,19 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; }
 body { background: var(--bg-deep); color: var(--text); font: 15px/1.4 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+
+/* Opening logo: pops in, then the view flies through the arrow cut into the app (about 0.85 s). */
+.splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--bg-deep); pointer-events: none;
+  animation: splash-out .2s ease-out .64s forwards; }
+.splash-logo { width: 64px; height: 70px; transform-origin: 55% 50%; will-change: transform, opacity;
+  animation: splash-in .22s cubic-bezier(.2, .9, .3, 1.2) both, splash-zoom .42s cubic-bezier(.7, 0, .84, 0) .3s forwards; }
+@keyframes splash-in { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes splash-zoom { from { transform: scale(1); } to { transform: scale(80); } }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .splash { animation-delay: .35s; }
+  .splash-logo { animation: splash-in .2s ease-out both; }
+}
 button, input, select, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; cursor: pointer; }
 a { color: inherit; text-decoration: none; }

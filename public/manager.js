@@ -354,7 +354,7 @@ $('inv-add').onclick = addFlightRow;
 $('inv-flights').addEventListener('click', (e) => { if (e.target.closest('[data-remove]')) e.target.closest('[data-flight]').remove(); });
 onView('invite', () => {
   if (!$('inv-flights').children.length) addFlightRow();
-  $('inv-demo').hidden = !EMBED || Boolean(liveInvite());
+  $('inv-demo').hidden = Boolean(liveInvite()); // until Ada is invited, on the demo page and on a phone
 });
 // Demo page: fill in Ada's real itinerary (the one the scripted flight feed follows).
 $('inv-demo').onclick = () => {

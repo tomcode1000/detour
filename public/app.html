@@ -24,6 +24,18 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body class="chooser-page">
+  <div class="splash" id="splash" aria-hidden="true"><svg class="splash-logo" viewBox="0 0 32 35"><path fill="#fff" d="M0 2.5A2.5 2.5 0 0 1 2.5 0H15c9.4 0 17 7.8 17 17.5S24.4 35 15 35H2.5A2.5 2.5 0 0 1 0 32.5z"/><path fill="#020a11" d="M7.2 8.4 25 17.5 7.2 26.6l4.3-9.1z"/></svg></div>
+  <script>
+    // Once per visit, never in screenshots. The splash removes itself when its animation ends.
+    (function () {
+      var el = document.getElementById('splash'), q = location.search, seen = false;
+      try { seen = sessionStorage.getItem('detour.splash') === '1'; sessionStorage.setItem('detour.splash', '1'); } catch (e) {}
+      if (seen || /[?&]snapshot/.test(q)) { el.remove(); return; }
+      el.addEventListener('animationend', function (e) { if (e.target === el) el.remove(); });
+      setTimeout(function () { if (el.isConnected) el.remove(); }, 2000);
+    })();
+  </script>
+
   <div class="chooser">
     <header class="chooser-top">
       <a class="logo white" href="/" aria-label="Detour website"><svg aria-hidden="true"><use href="#logo-w"/></svg>Detour</a>
