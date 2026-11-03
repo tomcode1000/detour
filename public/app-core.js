@@ -152,15 +152,19 @@ function renderClaim(c, { manage = false } = {}) {
   };
 }
 
-function hotelCardArt(c, { currency, holder }) {
+// A Detour card, drawn as a card. `tag` says what it pays for; `figure` is the amount shown.
+function cardArt(c, { currency, holder, tag = 'Hotels only', figure = ['Up to', c.limit] }) {
   const open = c.status === 'ACTIVE';
-  return `<div class="vcard ${open ? '' : 'closed'}" aria-label="Detour hotel card ending ${esc(c.last4 || '')}">
-    <div class="vcard-top"><span class="vcard-brand"><svg class="vcard-logo" viewBox="0 0 32 35"><use href="#logo"/></svg>Detour</span><span class="vcard-tag">${open ? 'Hotels only' : 'Closed'}</span></div>
+  return `<div class="vcard ${open ? '' : 'closed'}" aria-label="Detour card ending ${esc(c.last4 || '')}">
+    <div class="vcard-top"><span class="vcard-brand"><svg class="vcard-logo" viewBox="0 0 32 35"><use href="#logo"/></svg>Detour</span><span class="vcard-tag">${open ? esc(tag) : 'Closed'}</span></div>
     <div class="vcard-chip"></div>
     <div class="vcard-num">•••• •••• •••• ${esc(c.last4 || '----')}</div>
-    <div class="vcard-foot"><div><small>Card holder</small><b>${esc(holder)}</b></div><div><small>Up to</small><b>${money(c.limit, currency)}</b></div><div class="vcard-net">Airwallex</div></div>
+    <div class="vcard-foot"><div><small>Card holder</small><b>${esc(holder)}</b></div><div><small>${esc(figure[0])}</small><b>${money(figure[1], currency)}</b></div><div class="vcard-net">Airwallex</div></div>
   </div>`;
 }
+const hotelCardArt = (c, o) => cardArt(c, o);
+// The meals and taxis card: shows what is left to spend.
+const mealCardArt = (card, holder) => cardArt({ status: card.status, last4: card.last4, limit: card.controls.limit }, { currency: card.controls.currency, holder, tag: 'Meals & taxis', figure: ['Left to spend', Math.max(0, card.remaining)] });
 
 function toast(text) {
   const t = $('toast');

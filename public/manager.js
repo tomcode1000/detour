@@ -159,6 +159,11 @@ function momentsFor(a, b) {
     toast(`Paid ${parts.join(' and ')}.`);
   }
 
+  for (const t of (b.transactions || []).slice((a.transactions || []).length)) {
+    toast(t.status === 'APPROVED' ? `${first()} paid ${money(t.amount, t.currency)} at ${t.merchant.split(',')[0]}.` : `Card declined: ${money(t.amount, t.currency)} at ${t.merchant.split(',')[0]} is not meals or taxis.`);
+  }
+  if ((b.payments || []).length !== (a.payments || []).length || (b.transactions || []).length !== (a.transactions || []).length) loadBalance(true);
+
   // A traveller says the trip on their invite is wrong.
   for (const i of b.account?.invites || []) {
     if (i.disputed && !(a.account?.invites || []).find((x) => x.token === i.token)?.disputed) {
@@ -177,7 +182,7 @@ function momentsFor(a, b) {
       tone: 'ok', icon: 'check', title: 'Trip closed', sub: `${first()} is on the way. No expense claim to check.`,
       rows: sm.mode === 'transfer'
         ? [['users', `Sent to ${first()}`, money(sm.toTraveller, sm.currency)], ['bed', 'Paid to the hotel', money(sm.toHotel, sm.currency)], ['refresh', 'Cancelled, never paid', money(sm.cancelled, sm.currency)]]
-        : [['card', 'Spent on the card', money(sm.spent, sm.currency)]],
+        : [['card', 'Spent on the card', money(sm.spent, sm.currency)], ...(sm.toHotel ? [['bed', 'Paid to the hotel', money(sm.toHotel, sm.currency)]] : []), ...(sm.unused ? [['refresh', 'Left on the card, never spent', money(sm.unused, sm.currency)]] : [])],
       primary: { label: 'See payments', go: 'payments' }, secondary: { label: 'Close' },
     });
   }
@@ -205,9 +210,10 @@ function renderHome(pending) {
   const disrupted = S.disruption && !S.disruption.closed && !S.summary ? 1 : 0;
   const pay = S.payments || [];
   const cur = S.card?.controls.currency || S.account?.company.currency || 'EUR';
-  const sent = sum(pay.filter((l) => l.status === 'SENT'));
+  const sent = sum(pay.filter((l) => l.status === 'SENT')) + cardSpent();
   const sched = sum(pay.filter((l) => l.status === 'SCHEDULED'));
   const covered = S.card?.status === 'ACTIVE' ? 1 : 0;
+  $('h-balance').innerHTML = balanceHtml({ compact: true });
   $('h-tiles').innerHTML = `
     <button class="tile" data-go="trips">${icon('plane', 'c-cyan')}<b>${trips}</b><span>Active trips</span><em class="c-green">${invites.length ? `${invites.length} invited` : 'All being watched'}</em></button>
     <button class="tile" data-go="${pending.length ? 'approvals' : 'trips'}">${icon('warn', 'c-orange')}<b>${disrupted}</b><span>Disruptions</span><em class="${disrupted || pending.length ? 'c-orange' : 'c-green'}">${pending.length ? 'Needs attention' : disrupted ? 'Handled by Detour' : 'None right now'}</em></button>
@@ -435,6 +441,45 @@ function renderMore() {
     <div class="row"><span class="ic plain">${icon('sparkle')}</span><div class="grow"><b>Agent</b><small>${esc(S.adapters.agent)}</small></div><span class="pill ${liveAgent ? 'ok' : 'warn'}">${liveAgent ? 'Live' : 'Stand-in'}</span></div>`;
 }
 
+// ---------------------------------------------------------------- company balance (live from Airwallex)
+let BAL = null;           // [{ currency, available, pending }] or null
+let balAt = 0;
+async function loadBalance(force = false) {
+  if (!force && Date.now() - balAt < 15e3) return;
+  balAt = Date.now();
+  const j = await api('/api/balance', undefined, { quiet: true }).catch(() => null);
+  if (j?.ok && Array.isArray(j.result)) { BAL = j.result; if (S) { renderHome(S.approvals.filter((a) => a.status === 'PENDING')); renderPayments(); renderFunds(); } }
+}
+const cardSpent = () => sum((S.transactions || []).filter((t) => t.status === 'APPROVED'));
+// Money Detour has promised but not paid yet: scheduled hotel nights and what is left on open cards.
+function committed() {
+  const sched = sum((S.payments || []).filter((l) => l.status === 'SCHEDULED'));
+  const open = S.card?.status === 'ACTIVE' && S.mode === 'card' ? Math.max(0, S.card.remaining) : 0;
+  return { sched, open, total: sched + open };
+}
+function balanceHtml({ compact = false } = {}) {
+  const cur = S.card?.controls.currency || 'EUR';
+  const main = BAL?.find((b) => b.currency === cur);
+  const others = (BAL || []).filter((b) => b.currency !== cur && b.available > 0).slice(0, 3);
+  const c = committed();
+  if (!BAL) return compact ? '' : '<div class="card"><div class="empty">Reading your balance from Airwallex…</div></div>';
+  return `<div class="card"><button class="row tap" data-go="funds"><span class="ic green">${icon('bank')}</span><div class="grow"><small style="margin:0 0 2px">Company balance · Airwallex</small><b class="amount-big">${money(main?.available ?? 0, cur)}</b><small>${c.total ? `${money(c.total, cur)} set aside for open trips` : others.length ? others.map((b) => money(b.available, b.currency, { maximumFractionDigits: 0 })).join(' · ') : 'Nothing set aside right now'}</small></div><span class="pill info">Add funds</span>${icon('chev-r', 'chev')}</button></div>`;
+}
+const currencyName = (code) => { try { const n = new Intl.DisplayNames(['en'], { type: 'currency' }).of(code); return n.charAt(0).toUpperCase() + n.slice(1); } catch { return code; } };
+function renderFunds() {
+  if (!$('f-list')) return;
+  const cur = S.card?.controls.currency || 'EUR';
+  const list = (BAL || []).filter((b) => b.available > 0 || b.currency === cur).sort((a, b) => (b.currency === cur) - (a.currency === cur) || b.available - a.available);
+  $('f-list').innerHTML = BAL ? list.map((b) => `<div class="row"><span class="ic plain">${esc(b.currency.slice(0, 3))}</span><div class="grow"><b>${esc(currencyName(b.currency))}</b><small>${b.pending ? `${money(b.pending, b.currency)} pending` : 'Available'}</small></div><div class="end"><b>${money(b.available, b.currency)}</b></div></div>`).join('') : '<div class="empty">Reading your balance from Airwallex…</div>';
+  const c = committed();
+  $('f-commit').innerHTML = `<div class="row"><span class="ic orange">${icon('clock')}</span><div class="grow"><b>Set aside for open trips</b><small>${c.sched ? `${money(c.sched, cur)} hotel nights scheduled` : 'No hotel nights scheduled'}${c.open ? ` · ${money(c.open, cur)} left on Detour cards` : ''}</small></div><div class="end"><b>${money(c.total, cur)}</b></div></div>`;
+  $('f-open').href = S.adapters.fundingName.startsWith('airwallex') ? 'https://www.sandbox.airwallex.com/' : 'https://www.airwallex.com/';
+  $('f-note').textContent = S.adapters.fundingName.startsWith('airwallex') ? 'Read live from your Airwallex sandbox account. Sandbox balances are Airwallex test money.' : 'Local simulation: demo balances, not Airwallex.';
+}
+onView('funds', () => { renderFunds(); loadBalance(true); });
+onView('home', () => loadBalance());
+onView('payments', () => loadBalance());
+
 function renderPayments() {
   const pay = S.payments || [];
   const cur = S.card?.controls.currency || S.account?.company.currency || 'EUR';
@@ -445,10 +490,21 @@ function renderPayments() {
     ['bed', 'To hotels', sum(sent.filter((l) => l.role === 'hotel'))],
     ['doc', 'Fees', sum(sent, (l) => l.fee || 0)],
   ].map(([ic, k, v]) => `<div class="tile">${icon(ic, 'c-cyan')}<b style="font-size:17px">${money(v, cur)}</b><span style="font-size:12.5px">${k}</span></div>`).join('');
-  $('p-card').innerHTML = S.hotelCard ? hotelCardHtml(S.hotelCard, cur) : '';
+  $('p-balance').innerHTML = balanceHtml();
+  $('p-card').innerHTML = S.hotelCard ? hotelCardHtml(S.hotelCard, cur) : S.mode === 'card' && S.card ? mealCardHtml(S.card) : '';
   $('p-claim').innerHTML = claimRow(S.claim);
   if (S.mode !== 'transfer') {
-    $('p-list').innerHTML = S.transactions.length ? S.transactions.slice().reverse().map((t) => `<div class="row ${t.status === 'APPROVED' ? '' : 'off'}"><span class="ic">${icon('card')}</span><div class="grow"><b>${esc(t.merchant)}</b><small>${esc(dayHm(t.at, S.tz))} · ${t.status === 'APPROVED' ? 'Approved' : esc(t.reason)}</small></div><div class="end"><b>${money(t.amount, t.currency)}</b></div></div>`).join('') : '<div class="empty">No card payments yet.</div>';
+    // Card payments and the hotel paid directly, newest first.
+    const spent = cardSpent();
+    const hotelSent = sum(sent.filter((l) => l.role === 'hotel'));
+    $('p-total').innerHTML = `<div class="row"><span class="ic">${icon('wallet')}</span><div class="grow"><small style="margin:0 0 2px">Total paid</small><b class="amount-big">${money(spent + hotelSent, cur)}</b></div><div class="end"><small>${pay.filter((l) => l.status === 'SCHEDULED').length} scheduled</small><small>${S.transactions.filter((t) => t.status !== 'APPROVED').length} declined</small></div></div>`;
+    $('p-stats').innerHTML = [['card', 'On cards', spent], ['bed', 'To hotels', hotelSent], ['doc', 'Fees', sum(sent, (l) => l.fee || 0)]]
+      .map(([ic, k, v]) => `<div class="tile">${icon(ic, 'c-cyan')}<b style="font-size:17px">${money(v, cur)}</b><span style="font-size:12.5px">${k}</span></div>`).join('');
+    const rows = [
+      ...S.transactions.map((t) => ({ at: t.at, html: `<div class="row ${t.status === 'APPROVED' ? '' : 'off'}">${ADA}<div class="grow"><b>${esc(t.merchant.split(',')[0])}</b><small>Card ••${esc(S.card?.last4 || '')} · ${t.status === 'APPROVED' ? 'Approved' : t.reason === 'MERCHANT_CATEGORY_NOT_ALLOWED' ? 'Declined: not meals or taxis' : esc(t.reason)}</small><small>${esc(dateHm(t.at, S.tz))}</small></div><div class="end"><b>${money(t.amount, t.currency)}</b><div style="margin-top:6px">${t.status === 'APPROVED' ? '<span class="pill ok">Paid</span>' : '<span class="pill bad">Declined</span>'}</div></div></div>` })),
+      ...pay.map((l) => ({ at: l.placedAt ?? l.payAt, html: `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}"><span class="ic">${icon('building')}</span><div class="grow"><b>${esc(l.payeeName.replace(/\s+GmbH$/, ''))}</b><small>${esc(l.what)} · paid directly</small><small>${esc(l.status === 'SCHEDULED' ? `Due ${dateHm(l.payAt, S.tz)}` : l.status === 'CANCELLED' ? 'Not needed' : dateHm(l.payAt, S.tz))}</small></div><div class="end"><b>${money(l.amount, l.currency)}</b><div style="margin-top:6px">${PAY_PILL[l.status] || ''}</div></div></div>` })),
+    ].sort((a, b) => b.at - a.at);
+    $('p-list').innerHTML = rows.length ? rows.map((x) => x.html).join('') : '<div class="empty">No payments yet. They appear the moment a trip is disrupted.</div>';
     return;
   }
   $('p-list').innerHTML = pay.length ? pay.slice().reverse().map((l) => {
@@ -456,6 +512,12 @@ function renderPayments() {
     const lead = l.role === 'hotel' ? `<span class="ic">${icon('building')}</span>` : ADA;
     return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}">${lead}<div class="grow"><b>${esc(l.role === 'hotel' ? l.payeeName.replace(/\s+GmbH$/, '') : traveller())}</b><small>${esc(l.what)}${l.method === 'card' ? ` · Hotel card ••${esc(l.card)}` : ''}</small><small>${esc(when)}</small></div><div class="end"><b>${money(l.amount, l.currency)}</b><div style="margin-top:6px">${PAY_PILL[l.status] || ''}</div></div></div>`;
   }).join('') : '<div class="empty">No payments yet. They appear the moment a trip is disrupted.</div>';
+}
+
+// The traveller's meals and taxis card.
+function mealCardHtml(c) {
+  const open = c.status === 'ACTIVE';
+  return `<div class="section-head"><h2>${esc(first())}'s Detour card</h2></div><div class="card"><div class="row"><span class="ic purple">${icon('card')}</span><div class="grow"><b>Virtual card ••${esc(c.last4 || '----')}</b><small>Meals and taxis only · ${money(c.remaining, c.controls.currency)} left of ${money(c.controls.limit, c.controls.currency)}</small><small>${open ? `Closes ${esc(dateHm(c.controls.activeTo, S.tz))}` : 'Closed with the trip'} · issued on Airwallex</small></div><span class="pill ${open ? 'ok' : 'plain'}">${open ? 'Active' : 'Closed'}</span></div></div>`;
 }
 
 // The hotels-only Airwallex card the hotel nights are charged to.

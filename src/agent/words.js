@@ -90,11 +90,13 @@ export function describeNotice(notice, card, policy) {
   if (notice.type === 'airline_read') return describeAirlineRead(notice);
   if (notice.mode === 'transfer') return describeTransferNotice(notice, policy);
   const facts = card ? describeCard(card, policy, notice.spent || 0) : '';
+  const also = notice.payments ? ` Detour has also ${notice.payments}.` : '';
+  const claimLine = (c) => (c ? ` One more thing: under ${c.scheme}, ${c.airline} likely owes you ${fmtMoney(c.compensation, c.compCurrency)} for arriving this late. I've written the claim for you - it's in your Trips tab.` : '');
   switch (notice.type) {
     case 'issued':
-      return `${notice.reason}. Detour has set up a card for you: ${facts}. It's in your wallet now - just tap to pay.`;
+      return `${notice.reason}. Detour has set up your Detour card: ${facts}. It's in the Detour app.${also}`;
     case 'updated':
-      return `${notice.prefix ? `${notice.prefix} ` : ''}Your card has been updated: ${notice.change}. Now ${facts}.`;
+      return `${notice.prefix ? `${notice.prefix} ` : ''}Your card has been updated: ${notice.change}. Now ${facts}.${also}`;
     case 'approval_requested':
       return `${notice.tell || notice.why}. I've asked ${policy.travel_manager} to approve it - I'll tell you as soon as they answer.`;
     case 'approved':
@@ -104,9 +106,9 @@ export function describeNotice(notice, card, policy) {
     case 'purchase_declined':
       return `A payment of ${fmtMoney(notice.amount, notice.currency)} at ${notice.merchant} was declined: ${notice.reasonText}.`;
     case 'expired':
-      return `You're on your way. Your Detour card has been switched off.`;
+      return `You're on your way. Your Detour card has been switched off.${also}`;
     case 'closed':
-      return `You've landed. Your Detour card is now closed. You spent ${fmtMoney(notice.spent, notice.currency)} on it - no receipts or expense claim needed.`;
+      return `You've landed. Your Detour card is now closed. You spent ${fmtMoney(notice.spent, notice.currency)} on it${notice.toHotel ? ` and Detour paid the hotel ${fmtMoney(notice.toHotel, notice.currency)}` : ''} - no receipts or expense claim needed.${claimLine(notice.claim)}`;
     default:
       return notice.text || '';
   }

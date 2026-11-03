@@ -55,7 +55,9 @@ export function activeUntil({ start, next, now, policy }) {
 
 // The card the rules want for this situation.
 // `extras` and `extraCategories` are approved one-off raises (e.g. a hotel deposit).
-export function planControls({ nights, city, policy, activeFrom, activeTo, extras = 0, extraCategories = [] }) {
+// With `hotelDirect` the hotel is paid to the hotel, so the card covers meals and taxis only;
+// `breakdown.lodging` still says what the hotel nights cost.
+export function planControls({ nights, city, policy, activeFrom, activeTo, extras = 0, extraCategories = [], hotelDirect = false }) {
   const c = policy.categories;
   const days = nights + 1;
   const breakdown = {
@@ -64,13 +66,13 @@ export function planControls({ nights, city, policy, activeFrom, activeTo, extra
     lodging: round2(city.lodging_per_night * policy.rules.lodging_factor * nights),
     extras: round2(extras),
   };
-  const base = ['meals', 'transport', ...(nights > 0 ? ['lodging'] : [])];
+  const base = ['meals', 'transport', ...(nights > 0 && !hotelDirect ? ['lodging'] : [])];
   const categories = Object.keys(c).filter((k) => base.includes(k) || extraCategories.includes(k));
   return {
     currency: city.currency,
     categories,
     mccs: categories.flatMap((k) => c[k].mccs),
-    limit: round2(breakdown.meals + breakdown.transport + breakdown.lodging + breakdown.extras),
+    limit: round2(breakdown.meals + breakdown.transport + (hotelDirect ? 0 : breakdown.lodging) + breakdown.extras),
     breakdown,
     nights,
     activeFrom,

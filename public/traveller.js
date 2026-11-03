@@ -183,7 +183,7 @@ function momentsFor(a, b) {
       tone: 'warn', icon: 'warn', title,
       sub: `Detour is on it. You're covered in ${city(d.airport)}, inside ${companyName(b)}'s policy.`,
       rows: rates ? [
-        ['meal', 'Meals, sent to your account', `${whole(rates.meals_per_day, rates.currency)} / day`],
+        ['meal', b.mode === 'card' ? 'Meals, on your Detour card' : 'Meals, sent to your account', `${whole(rates.meals_per_day, rates.currency)} / day`],
         ['car', 'Taxis and transport', whole(rates.transport, rates.currency)],
         ['bed', 'Hotel, paid directly if you stay', `${whole(rates.lodging_per_night * b.policy.rules.lodging_factor, rates.currency)} / night`],
       ] : [],
@@ -191,12 +191,29 @@ function momentsFor(a, b) {
     });
   }
 
+  // The Detour card is made, raised, used or refused
+  if (b.card && !a.card && b.mode === 'card') {
+    moment({
+      tone: 'ok', icon: 'card', title: 'Your Detour card is ready',
+      sub: `Use it for meals and taxis in ${b.card.controls.city}. It works until your next flight leaves.`,
+      amount: money(b.card.controls.limit, b.card.controls.currency), amountNote: `Card ending ${b.card.last4 || '----'}`,
+      rows: [['meal', 'Restaurants and cafés', 'Yes'], ['car', 'Taxis and transport', 'Yes'], ['x', 'Anything else', 'Declined']],
+      primary: { label: 'See your card', go: 'home' },
+    });
+  } else if (b.card && a.card && b.mode === 'card' && b.card.controls.limit > a.card.controls.limit) {
+    toast(`Your Detour card now has ${money(b.card.remaining, b.card.controls.currency)} to spend.`);
+  }
+  for (const t of (b.transactions || []).slice((a.transactions || []).length)) {
+    if (t.status === 'APPROVED') toast(`Paid ${money(t.amount, t.currency)} at ${t.merchant.split(',')[0]} with your Detour card.`);
+    else moment({ tone: 'bad', icon: 'x', title: 'Card payment declined', sub: `${t.merchant.split(',')[0]} tried to charge ${money(t.amount, t.currency)}. ${t.reason === 'MERCHANT_CATEGORY_NOT_ALLOWED' ? 'Your Detour card pays for meals and taxis only.' : t.reason === 'LIMIT_EXCEEDED' ? 'That is more than is left on your card. Message Detour if you need more.' : 'Message Detour if you need help.'}`, primary: { label: 'Message Detour', go: 'messages' }, secondary: { label: 'Close' } });
+  }
+
   // Money reaches the traveller's account
   const sentToMe = pays.filter((l) => l.role === 'traveller' && l.status === 'SENT' && was(l.id)?.status !== 'SENT');
   if (sentToMe.length) {
     const rec = sentToMe.filter((l) => l.received);
     const home = rec[0]?.received.currency;
-    const last4 = INV.registration?.bank.last4;
+    const last4 = INV.registration?.bank?.last4;
     moment({
       tone: 'ok', icon: 'check', title: 'Money received',
       amount: home ? money(sum(rec, (l) => l.received.amount), home) : money(sum(sentToMe), sentToMe[0].currency),
@@ -261,7 +278,7 @@ function momentsFor(a, b) {
       tone: 'ok', icon: 'check', title: 'Trip resolved', sub: 'Have a good flight. Nothing to claim and no receipts to keep.',
       rows: sm.mode === 'transfer'
         ? [['wallet', 'Sent to you', money(sm.toTraveller, sm.currency)], ['bed', 'Hotel, paid directly', money(sm.toHotel, sm.currency)], ['refresh', 'Cancelled, never paid', money(sm.cancelled, sm.currency)]]
-        : [['card', 'Spent on your card', money(sm.spent, sm.currency)]],
+        : [['card', 'Spent on your card', money(sm.spent, sm.currency)], ...(sm.toHotel ? [['bed', 'Hotel, paid directly', money(sm.toHotel, sm.currency)]] : []), ...(sm.cancelled ? [['refresh', 'Cancelled, never paid', money(sm.cancelled, sm.currency)]] : [])],
       primary: { label: 'Back to home', go: 'home' },
     });
   }
@@ -271,7 +288,7 @@ function momentsFor(a, b) {
 function stepperHtml() {
   const d = live() ? S?.disruption : null;
   if (!d && !S?.summary) return '';
-  const paid = toTraveller().some((l) => l.status === 'SENT');
+  const paid = toTraveller().some((l) => l.status === 'SENT') || hotelPays().some((l) => l.status === 'SENT') || (S.transactions || []).some((t) => t.status === 'APPROVED');
   const done = [Boolean(d), Boolean(S.card), paid, Boolean(S.summary || d?.closed)];
   const now = done.indexOf(false);
   const steps = [['plane', 'Disruption detected'], ['shield-o', 'Support provided'], ['card', 'Payment sent'], ['home', 'Trip resolved']];
@@ -286,7 +303,7 @@ function statusBanner() {
   const d = S.disruption;
   if (S.summary) {
     const sm = S.summary;
-    const sent = sm.mode === 'transfer' ? `Detour sent you ${money(sm.toTraveller, sm.currency)} and paid your hotel.` : `You spent ${money(sm.spent, sm.currency)} on your Detour card.`;
+    const sent = sm.mode === 'transfer' ? `Detour sent you ${money(sm.toTraveller, sm.currency)} and paid your hotel.` : `You spent ${money(sm.spent, sm.currency)} on your Detour card${sm.toHotel ? ' and Detour paid your hotel' : ''}.`;
     return `<div class="banner ok"><span class="badge">${icon('check')}</span><div class="grow"><b>Trip resolved</b><small>${esc(sent)} Nothing to claim, no receipts.</small></div></div>`;
   }
   if (d && !d.closed) {
@@ -322,8 +339,6 @@ function renderHome() {
       const more = sched.length ? ` · ${money(sum(sched), sched[0].currency)} more scheduled` : '';
       rows.push(`<button class="row tap" data-go="trips"><span class="ic">${icon('wallet')}</span><div class="grow"><b>${money(sum(rec, (l) => l.received.amount), cur)}</b><small>Received in your account${esc(more)}</small></div>${icon('chev-r', 'chev')}</button>`);
     }
-  } else if (c) {
-    rows.push(`<div class="row"><span class="ic">${icon('card')}</span><div class="grow"><b>${money(c.remaining, c.controls.currency)}</b><small>Left on your Detour card</small></div></div>`);
   }
   const hotel = hotelPays().filter((l) => l.status !== 'CANCELLED');
   if (live() && hotel.length && !S.summary) {
@@ -332,10 +347,13 @@ function renderHome() {
   }
   $('h-rows').innerHTML = rows.map((r) => `<div class="card">${r}</div>`).join('');
   const hc = live() && S?.hotelCard;
-  $('h-card').innerHTML = hc && hc.status === 'ACTIVE' ? `<div class="section-head"><h2>Your hotel card</h2></div>${hotelCardArt(hc, { currency: S.card?.controls.currency || 'EUR', holder: INV.registration?.name || INV.name })}` : '';
+  const holder = INV.registration?.name || INV.name;
+  if (c && S.mode === 'card' && c.status === 'ACTIVE') $('h-card').innerHTML = `<div class="section-head"><h2>Your Detour card</h2></div>${mealCardArt(c, holder)}`;
+  else $('h-card').innerHTML = hc && hc.status === 'ACTIVE' ? `<div class="section-head"><h2>Your hotel card</h2></div>${hotelCardArt(hc, { currency: S.card?.controls.currency || 'EUR', holder })}` : '';
 
   // What's covered, while the disruption is open
-  if (c && c.status === 'ACTIVE' && d && !d.closed && S.mode === 'transfer') {
+  if (c && c.status === 'ACTIVE' && d && !d.closed) {
+    const onCard = S.mode === 'card';
     const rates = S.policy.cities[d.airport];
     const cur = c.controls.currency;
     const pays = S.payments || [];
@@ -345,9 +363,9 @@ function renderHome() {
     const perNight = Math.round(rates.lodging_per_night * S.policy.rules.lodging_factor * 100) / 100;
     $('h-covered').innerHTML = `<div class="section-head"><h2>What's covered in ${esc(city(d.airport))}</h2></div>
       <div class="card">
-        <div class="row"><span class="ic">${icon('meal')}</span><div class="grow"><b>Meals</b><small>${meals ? `${meals} day${meals > 1 ? 's' : ''} sent to your account` : 'Sent to your account each morning'}</small></div><div class="end"><b>${money(rates.meals_per_day, cur)}</b><small>per day</small></div></div>
-        <div class="row"><span class="ic">${icon('car')}</span><div class="grow"><b>Taxis and transport</b><small>Sent to your account</small></div><div class="end"><b>${money(rates.transport, cur)}</b><small>per stay</small></div></div>
-        <div class="row"><span class="ic">${icon('bed')}</span><div class="grow"><b>Hotel</b><small>${nights ? `${S.hotelCard ? 'On your hotel card' : 'Paid directly'} · ${nights} night${nights > 1 ? 's' : ''}` : 'Added if you need to stay the night'}</small></div><div class="end"><b>${money(perNight, cur)}</b><small>per night</small></div></div>
+        <div class="row"><span class="ic">${icon('meal')}</span><div class="grow"><b>Meals</b><small>${onCard ? 'On your Detour card' : meals ? `${meals} day${meals > 1 ? 's' : ''} sent to your account` : 'Sent to your account each morning'}</small></div><div class="end"><b>${money(rates.meals_per_day, cur)}</b><small>per day</small></div></div>
+        <div class="row"><span class="ic">${icon('car')}</span><div class="grow"><b>Taxis and transport</b><small>${onCard ? 'On your Detour card' : 'Sent to your account'}</small></div><div class="end"><b>${money(rates.transport, cur)}</b><small>per stay</small></div></div>
+        <div class="row"><span class="ic">${icon('bed')}</span><div class="grow"><b>Hotel</b><small>${nights ? `${S.hotelCard ? 'On your hotel card' : 'Paid directly to the hotel'} · ${nights} night${nights > 1 ? 's' : ''}` : 'Paid directly if you need to stay the night'}</small></div><div class="end"><b>${money(perNight, cur)}</b><small>per night</small></div></div>
       </div>`;
   } else {
     $('h-covered').innerHTML = '';
@@ -376,6 +394,13 @@ function renderTrips() {
       const amt = l.role === 'traveller' && l.received && l.received.currency !== l.currency ? money(l.received.amount, l.received.currency) : money(l.amount, l.currency);
       return `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}"><span class="ic ${l.role === 'hotel' ? 'purple' : ''}">${icon(l.role === 'hotel' ? 'bed' : /meals/.test(l.what) ? 'meal' : /Taxi/.test(l.what) ? 'car' : 'wallet')}</span><div class="grow"><b>${esc(l.what)}</b><small>${l.method === 'card' ? `Hotel card ••${esc(l.card)}` : l.role === 'hotel' ? 'Paid to the hotel' : 'To your account'} · ${esc(when)}</small></div><div class="end"><b>${esc(amt)}</b>${pill}</div></div>`;
     }).join('') || '<div class="empty">No payments yet.</div>'}</div>`;
+  } else if (c && S.mode === 'card') {
+    const holder = INV.registration?.name || INV.name;
+    const tx = (S.transactions || []).slice().reverse().map((t) => `<div class="row ${t.status === 'APPROVED' ? '' : 'off'}"><span class="ic">${icon(/5812|5814|5813/.test(t.mcc) ? 'meal' : /4121|4111|4131/.test(t.mcc) ? 'car' : 'card')}</span><div class="grow"><b>${esc(t.merchant.split(',')[0])}</b><small>${esc(dayHm(t.at, S.tz))} · ${t.status === 'APPROVED' ? 'Paid with your card' : 'Declined: not covered'}</small></div><div class="end"><b>${money(t.amount, t.currency)}</b>${t.status === 'APPROVED' ? '' : '<span class="pill bad">Declined</span>'}</div></div>`).join('');
+    const hotelRows = hotelPays().slice().reverse().map((l) => `<div class="row ${l.status === 'CANCELLED' ? 'off' : ''}"><span class="ic purple">${icon('bed')}</span><div class="grow"><b>${esc(l.what)}</b><small>${esc(l.payeeName.replace(/\s+GmbH$/, ''))} · ${l.status === 'SENT' ? 'Paid directly' : l.status === 'SCHEDULED' ? `Due ${esc(dayHm(l.payAt, S.tz))}` : 'Not needed'}</small></div><div class="end"><b>${money(l.amount, l.currency)}</b>${{ SENT: '<span class="pill ok">Paid</span>', SCHEDULED: '<span class="pill warn">Scheduled</span>', CANCELLED: '<span class="pill plain">Cancelled</span>' }[l.status] || ''}</div></div>`).join('');
+    $('t-cover').innerHTML = `<div class="section-head"><h2>Your Detour card</h2></div>${mealCardArt(c, holder)}<p class="fine" style="margin-top:-4px">${c.status === 'ACTIVE' ? `Meals and taxis only, until ${esc(dayHm(c.controls.activeTo, S.tz))}. Anything else is declined.` : 'Closed when your trip ended. What you did not spend stays with your company.'}</p>
+      <div class="section-head"><h2>Card payments</h2></div><div class="card">${tx || '<div class="empty">No card payments yet.</div>'}</div>
+      ${hotelRows ? `<div class="section-head"><h2>Hotel</h2></div><div class="card">${hotelRows}</div>` : ''}`;
   } else {
     $('t-cover').innerHTML = '';
   }
@@ -458,15 +483,15 @@ function renderMore() {
   $('m-edit').hidden = !r;
   if (!r) {
     $('m-details').innerHTML = `<div class="row"><span class="ic plain">${icon('mail')}</span><div class="grow"><small style="margin:0 0 2px">Email</small><b>${esc(INV.email)}</b></div></div>
-      <button class="row tap" data-go="reg1"><span class="ic orange">${icon('bank')}</span><div class="grow"><b>Finish registration</b><small>Add your phone and the bank account for allowances</small></div>${icon('chev-r', 'chev')}</button>
+      <button class="row tap" data-go="reg1"><span class="ic orange">${icon('card')}</span><div class="grow"><b>Finish registration</b><small>Add your phone and the details for your Detour card</small></div>${icon('chev-r', 'chev')}</button>
       <div class="row"><span class="ic plain">${icon('briefcase')}</span><div class="grow"><small style="margin:0 0 2px">Travel manager</small><b>${esc(INV.manager || '')} · ${esc(INV.company || '')}</b></div></div>`;
     return;
   }
   const rows = [
     ['mail', 'Email', INV.email],
     ['phone', 'Mobile', r?.phone || 'Not added'],
-    ['currency', 'Home currency', r?.homeCurrency || '—'],
-    ['bank', 'Bank account', r ? `•••• ${r.bank.last4} · ${r.bank.code}` : 'Not added'],
+    ['pin', 'Home address', r?.address ? [r.address.line1, r.address.city, r.address.country].filter(Boolean).join(', ') : 'Not added'],
+    ['card', 'Detour card', S?.card?.last4 && live() ? `•••• ${S.card.last4} · meals and taxis` : 'Made when a flight is disrupted'],
     ['briefcase', 'Travel manager', `${INV.manager || ''} · ${INV.company || ''}`],
   ];
   $('m-details').innerHTML = rows.map(([ic, k, v]) => `<div class="row"><span class="ic plain">${icon(ic)}</span><div class="grow"><small style="margin:0 0 2px">${esc(k)}</small><b>${esc(v)}</b></div></div>`).join('');
@@ -478,12 +503,11 @@ $('m-edit').onclick = () => {
   editing = true;
   $('r-name').value = r.name || INV.name;
   $('r-phone').value = r.phone || '';
-  $('r-cur').value = r.homeCurrency || 'SGD';
-  $('r-country').value = r.bank.country || 'SG';
-  $('r-holder').value = r.bank.holder || '';
-  $('r-code').value = r.bank.code || '';
-  $('r-account').value = '';
-  $('r-account').placeholder = `Type it again (ends ${r.bank.last4})`;
+  $('r-dob').value = r.dob || '';
+  $('r-line1').value = r.address?.line1 || '';
+  $('r-city').value = r.address?.city || '';
+  $('r-postcode').value = r.address?.postcode || '';
+  $('r-country').value = r.address?.country || 'SG';
   $('r-msgs').checked = r.messages !== false;
   go('reg1');
 };
@@ -500,7 +524,6 @@ function renderWelcome() {
     <div class="meta" style="border:0;padding-top:4px;margin-top:6px;flex-wrap:wrap;gap:10px 18px"><span>${icon('calendar')}${ls[0] ? esc(dayDate(ls[0].dep, tz)) : ''}</span><span>${icon('plane')}${esc(ls.map((l) => l.id).join(' · '))}</span></div>`;
   $('w-by').innerHTML = `<span class="avatar">${esc(initials(INV.manager || 'S'))}</span><div class="grow"><small style="margin:0">Invited by</small><b>${esc(INV.manager)}, Travel manager</b></div>`;
   $('r-name').value = INV.name;
-  $('r-holder').value = INV.name;
 }
 
 $('reg1-form').onsubmit = (e) => {
@@ -509,7 +532,6 @@ $('reg1-form').onsubmit = (e) => {
   err.textContent = '';
   if (!$('r-name').value.trim()) { err.textContent = 'Add your full name.'; return; }
   if (!/^\+?[\d\s()-]{7,}$/.test($('r-phone').value.trim())) { err.textContent = 'Add a mobile number, with the country code.'; return; }
-  if (!$('r-holder').value.trim() || $('r-holder').value === INV.name) $('r-holder').value = $('r-name').value.trim();
   go('reg2');
 };
 $('reg2-form').onsubmit = async (e) => {
@@ -522,8 +544,8 @@ $('reg2-form').onsubmit = async (e) => {
     token: INV.token,
     name: $('r-name').value,
     phone: $('r-phone').value,
-    homeCurrency: $('r-cur').value,
-    bank: { country: $('r-country').value, holder: $('r-holder').value, account: $('r-account').value, code: $('r-code').value },
+    dob: $('r-dob').value,
+    address: { line1: $('r-line1').value, city: $('r-city').value, postcode: $('r-postcode').value, country: $('r-country').value },
     messages: $('r-msgs').checked,
   }, { quiet: true });
   btn.disabled = false;
@@ -531,8 +553,6 @@ $('reg2-form').onsubmit = async (e) => {
   if (!j.ok) { $('reg2-error').textContent = j.error; return; }
   INV.registration = j.result;
   session.set({ token: INV.token, email: INV.email });
-  $('r-account').value = '';
-  $('r-account').placeholder = '1234567890';
   if (editing) { editing = false; renderMore(); go('more', { replace: true }); toast('Your details are updated.'); return; }
   go('mapintro', { replace: true });
 };

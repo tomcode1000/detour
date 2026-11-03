@@ -208,17 +208,23 @@ export class Accounts {
     const inv = this.invites.find((i) => i.token === clean(b.token, 40));
     if (!inv) throw new Error('This invite link is not valid.');
     if (Date.now() > inv.expiresAt) throw new Error('This invite has expired. Ask your travel manager for a new one.');
+    // A card in the traveller's name needs what every card issuer asks for: date of birth and
+    // home address. No bank account: meals and taxis go on the card, the hotel is paid directly.
     const phone = clean(b.phone, 24);
-    const account = clean(b.bank?.account, 34).replace(/\s+/g, '');
+    const dob = clean(b.dob, 10);
+    const a = b.address || {};
+    const address = { line1: clean(a.line1, 100), city: clean(a.city, 60), postcode: clean(a.postcode, 12), country: clean(a.country, 2).toUpperCase() };
     if (!/^\+?[\d\s()-]{7,}$/.test(phone)) throw new Error('Add a mobile number, with the country code.');
-    if (!clean(b.bank?.holder)) throw new Error('Add the account holder name.');
-    if (account.length < 6) throw new Error('Add your account number.');
-    if (!clean(b.bank?.code)) throw new Error('Add the bank code (SWIFT or local code).');
+    const born = Date.parse(dob);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || Number.isNaN(born)) throw new Error('Add your date of birth.');
+    if (Date.now() - born < 18 * 365.25 * DAY || Date.now() - born > 110 * 365.25 * DAY) throw new Error('Check your date of birth: the card holder must be 18 or older.');
+    if (!address.line1 || !address.city) throw new Error('Add your home address and city.');
+    if (!/^[A-Z]{2}$/.test(address.country)) throw new Error('Choose your country.');
     const reg = {
       name: clean(b.name, 80) || inv.name,
       phone,
-      homeCurrency: clean(b.homeCurrency, 3).toUpperCase() || 'SGD',
-      bank: { country: clean(b.bank.country, 2).toUpperCase(), holder: clean(b.bank.holder, 80), last4: account.slice(-4), code: clean(b.bank.code, 11).toUpperCase() },
+      dob,
+      address,
       messages: Boolean(b.messages),
       at: Date.now(),
     };

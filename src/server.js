@@ -83,6 +83,7 @@ const actions = {
   }) : null),
 };
 
+let balanceCache = null;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -94,6 +95,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === '/api/state') return send(res, 200, state());
+  if (url.pathname === '/api/balance') {
+    // The company's Airwallex balances, read live (kept for 20 s so screens can ask freely).
+    try {
+      if (!balanceCache || Date.now() - balanceCache.at > 20e3) balanceCache = { at: Date.now(), items: engine.funding.balances ? await engine.funding.balances() : null };
+      return send(res, 200, { ok: true, result: balanceCache.items });
+    } catch (e) {
+      return send(res, 500, { ok: false, error: e.message });
+    }
+  }
 
   const action = actions[`${req.method} ${url.pathname}`];
   if (action) {

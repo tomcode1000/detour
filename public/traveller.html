@@ -69,8 +69,8 @@
           <div class="card pad" id="w-trip"></div>
           <div class="section-head"><h2>What's covered</h2></div>
           <div class="card covers">
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-meal"/></svg></span><div class="grow"><b>Meals and taxis</b><small>Paid to you if your flight is disrupted</small></div></div>
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-bed"/></svg></span><div class="grow"><b>Hotel</b><small>Paid for you on a hotels-only card</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-meal"/></svg></span><div class="grow"><b>Meals and taxis</b><small>On your Detour card if a flight is disrupted</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-bed"/></svg></span><div class="grow"><b>Hotel</b><small>Paid directly to the hotel</small></div></div>
             <div class="row"><span class="ic"><svg class="i"><use href="#i-chat"/></svg></span><div class="grow"><b>Help</b><small>Message Detour any time</small></div></div>
           </div>
           <div class="row" id="w-by"></div>
@@ -98,7 +98,6 @@
           <form class="form" id="reg1-form" novalidate>
             <label class="field"><span>Full name</span><input id="r-name" autocomplete="name" required></label>
             <label class="field"><span>Mobile number</span><input id="r-phone" type="tel" autocomplete="tel" placeholder="+65 9123 4567" required></label>
-            <label class="field"><span>Home currency</span><select id="r-cur"><option>SGD</option><option>EUR</option><option>GBP</option><option>USD</option><option>AUD</option><option>JPY</option><option>HKD</option></select><small>Allowances arrive in this currency.</small></label>
             <p class="form-error" id="reg1-error"></p>
             <button class="btn primary block" type="submit">Continue <svg class="i"><use href="#i-arrow"/></svg></button>
           </form>
@@ -107,13 +106,13 @@
         <!-- Finish registration, step 2 -->
         <section class="view" data-view="reg2" data-no-tabs data-sub>
           <div class="steps"><i class="on"></i><i class="on"></i><span>2 of 2</span></div>
-          <div class="page-head"><h1 class="title">Where we send your money</h1><p class="sub">Your allowances for meals and taxis go to this account.</p></div>
+          <div class="page-head"><h1 class="title">For your Detour card</h1><p class="sub">Meals and taxis go on a card in your name. Card issuers need these details to make it.</p></div>
           <form class="form" id="reg2-form" novalidate>
-            <label class="field"><span>Bank country</span><select id="r-country"><option value="SG">Singapore</option><option value="GB">United Kingdom</option><option value="DE">Germany</option><option value="US">United States</option><option value="AU">Australia</option><option value="HK">Hong Kong</option><option value="JP">Japan</option></select></label>
-            <label class="field"><span>Account holder name</span><input id="r-holder" autocomplete="name" required></label>
-            <label class="field"><span>Account number</span><input id="r-account" inputmode="numeric" autocomplete="off" placeholder="1234567890" required></label>
-            <label class="field"><span>Bank code (SWIFT or local)</span><input id="r-code" autocomplete="off" placeholder="DBSSSGSG" required></label>
-            <div class="note"><svg class="i"><use href="#i-lock"/></svg><span>Only used for your trip allowances. Your company never sees these details. This demo keeps just the last four digits.</span></div>
+            <label class="field"><span>Date of birth</span><input id="r-dob" type="date" autocomplete="bday" required></label>
+            <label class="field"><span>Home address</span><input id="r-line1" autocomplete="address-line1" placeholder="1 Raffles Place" required></label>
+            <div class="grid2"><label class="field"><span>City</span><input id="r-city" autocomplete="address-level2" placeholder="Singapore" required></label><label class="field"><span>Postcode</span><input id="r-postcode" autocomplete="postal-code" placeholder="048616"></label></div>
+            <label class="field"><span>Country</span><select id="r-country"><option value="SG">Singapore</option><option value="GB">United Kingdom</option><option value="DE">Germany</option><option value="FR">France</option><option value="NL">Netherlands</option><option value="US">United States</option><option value="AU">Australia</option><option value="HK">Hong Kong</option><option value="JP">Japan</option><option value="MY">Malaysia</option><option value="NG">Nigeria</option></select></label>
+            <div class="note"><svg class="i"><use href="#i-lock"/></svg><span>No bank account needed. Your hotel is paid directly, and your card works only for meals and taxis during a disruption. Your company never sees these details.</span></div>
             <label class="check"><input type="checkbox" id="r-msgs" checked><span>Send me messages about my trip</span></label>
             <p class="form-error" id="reg2-error"></p>
             <button class="btn primary block" type="submit">Finish</button>
@@ -173,7 +172,7 @@
           <div class="who" id="m-who"></div>
           <div class="card" id="m-details"></div>
           <div class="card">
-            <button class="row tap" id="m-edit" hidden><span class="ic"><svg class="i"><use href="#i-edit"/></svg></span><div class="grow"><b>Edit your details</b><small>Mobile number, home currency or bank account</small></div><svg class="i chev"><use href="#i-chev-r"/></svg></button>
+            <button class="row tap" id="m-edit" hidden><span class="ic"><svg class="i"><use href="#i-edit"/></svg></span><div class="grow"><b>Edit your details</b><small>Mobile number, date of birth or home address</small></div><svg class="i chev"><use href="#i-chev-r"/></svg></button>
             <div class="slot" id="m-notif"></div>
             <a class="row tap" href="/app?choose"><span class="ic"><svg class="i"><use href="#i-swap"/></svg></span><div class="grow"><b>Switch role</b><small>Open Detour as a travel manager</small></div><svg class="i chev"><use href="#i-chev-r"/></svg></a>
             <button class="row tap" id="m-signout"><span class="ic red"><svg class="i"><use href="#i-logout"/></svg></span><div class="grow"><b>Sign out</b><small>Remove your trip from this phone</small></div></button>

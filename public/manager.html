@@ -102,6 +102,7 @@
           <button class="role-chip" data-go="more"><svg class="i"><use href="#i-briefcase"/></svg>Travel manager<svg class="i sm"><use href="#i-chev-d"/></svg></button>
           <div class="page-head"><h1 class="title" id="h-hello"></h1><p class="sub">Here's your travel overview for today.</p></div>
           <div class="tiles" id="h-tiles"></div>
+          <div id="h-balance"></div>
           <div id="h-decisions"></div>
           <div class="section-head"><h2>Active trips</h2><button data-go="trips">View all <svg class="i"><use href="#i-arrow"/></svg></button></div>
           <div class="list" id="h-trips"></div>
@@ -185,12 +186,28 @@
 
         <section class="view" data-view="payments" data-tab="more" data-sub>
           <div class="page-head"><h1 class="title">Payments</h1><p class="sub">Every payment made during travel disruptions.</p></div>
+          <div id="p-balance"></div>
           <div class="card" id="p-total"></div>
           <div class="grid3" id="p-stats"></div>
           <div id="p-card"></div>
           <div id="p-claim"></div>
           <div class="section-head"><h2>Payment history</h2></div>
           <div class="card" id="p-list"></div>
+        </section>
+
+        <!-- The company's Airwallex balance, and how to add to it -->
+        <section class="view" data-view="funds" data-tab="more" data-sub>
+          <div class="page-head"><h1 class="title">Company balance</h1><p class="sub">Every Detour payment comes from your company's Airwallex account. Detour never holds your money.</p></div>
+          <div class="card" id="f-list"></div>
+          <div class="card" id="f-commit"></div>
+          <div class="section-head"><h2>Add funds</h2></div>
+          <div class="card">
+            <div class="row"><span class="ic plain">1</span><div class="grow"><b>Open your Airwallex account details</b><small>In Airwallex, each currency has its own local account number in your company's name.</small></div></div>
+            <div class="row"><span class="ic plain">2</span><div class="grow"><b>Send money from your company bank</b><small>A normal bank transfer to those details, in the currency you want to top up.</small></div></div>
+            <div class="row"><span class="ic plain">3</span><div class="grow"><b>It shows here</b><small>Detour pays meals, taxis and hotels from this balance, inside your travel policy.</small></div></div>
+          </div>
+          <a class="btn ghost block" id="f-open" href="https://www.airwallex.com/" target="_blank" rel="noopener"><svg class="i"><use href="#i-bank"/></svg>Open Airwallex</a>
+          <p class="fine" id="f-note"></p>
         </section>
 
         <section class="view" data-view="policy" data-tab="more" data-sub>

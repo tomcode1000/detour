@@ -1,6 +1,6 @@
 // Detour service worker: keeps the app shell available so the installed app opens instantly.
 // Live data (/api, /events) always goes to the network.
-const CACHE = 'detour-shell-v10';
+const CACHE = 'detour-shell-v11';
 const SHELL = [
   '/app', '/traveller', '/manager',
   '/app.css', '/app-core.js', '/traveller.js', '/manager.js', '/img/app/ada.jpg', '/img/app/hotel.jpg', '/img/app/company.jpg',

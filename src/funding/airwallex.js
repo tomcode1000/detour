@@ -65,9 +65,16 @@ export function createAirwallexFunding({ env, clock }) {
     last4: card.card_number ? String(card.card_number).slice(-4) : null,
   });
 
+  // The company's Airwallex balances: what every payment is made from.
+  async function balances() {
+    const r = await call('GET', '/api/v1/balances/current');
+    return (Array.isArray(r) ? r : r.items || []).map((b) => ({ currency: b.currency, available: b.available_amount, pending: b.pending_amount ?? 0 }));
+  }
+
   return {
     kind: 'card',
     name: 'airwallex',
+    balances,
     label: 'Airwallex sandbox · card',
 
     async issue({ traveller, controls, requestId }) {

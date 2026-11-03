@@ -128,3 +128,37 @@ test('Ada with a hotel card: nights charged to a hotels-only card, limit follows
   assert.equal(e.summary.toTraveller, 180);
   assert.equal(e.log.filter((l) => l.source === 'error').length, 0, JSON.stringify(e.log.filter((l) => l.source === 'error')));
 });
+
+test('Ada with the meal card: meals and taxis on her card, the hotel paid directly, dinner approved, headphones declined', async () => {
+  const e = new Engine({
+    scenario, policy, agent: createStandinAgent(), runId: 'test',
+    makeFunding: ({ clock, runKey }) => createFunding({ env: { FUNDING: 'meal-card-local' }, clock, runKey, scenario, policy }),
+  });
+  assert.equal(e.mode, 'card');
+  await playUntil(e, (x) => x.card);
+  assert.equal(e.card.controls.limit, 120, 'day 1 meals + taxis');
+  assert.ok(!e.card.controls.mccs.includes('7011'), 'no hotels on the card');
+  assert.deepEqual(ledger(e), [], 'nothing sent to a bank account');
+
+  await playUntil(e, (x) => x.legs.includes('DA902'));
+  assert.deepEqual(e.transactions.map((t) => [t.label, t.status]), [['dinner', 'APPROVED'], ['headphones', 'DECLINED']]);
+  assert.equal(byKey(e, 'hotel-1').status, 'SENT');
+  assert.equal(byKey(e, 'hotel-1').role, 'hotel');
+  assert.equal(e.card.controls.limit, 180, 'two days of meals + taxis; the hotel is not on the card');
+  assert.match(e.messages.at(-1).text, /paid Airport Hotel Frankfurt GmbH 180 EUR directly/);
+
+  await playUntil(e, (x) => x.waiting && x.approvals.some((a) => a.status === 'PENDING'));
+  await e.decide(e.approvals.find((a) => a.status === 'PENDING').id, 'approve');
+  assert.equal(byKey(e, 'hotel-2').status, 'SCHEDULED');
+  await playUntil(e, (x) => x.legs.includes('DA910'));
+  assert.equal(byKey(e, 'hotel-2').status, 'CANCELLED');
+
+  await playUntil(e, (x) => x.finished);
+  assert.equal(e.card.status, 'CLOSED');
+  assert.equal(e.summary.toHotel, 180);
+  assert.equal(e.summary.spent, 18.4);
+  assert.equal(e.claim.scheme, 'UK261');
+  assert.equal(e.claim.care.total, 198.4);
+  assert.match(e.messages.at(-1).text, /520 GBP/);
+  assert.equal(e.log.filter((l) => l.source === 'error').length, 0, JSON.stringify(e.log.filter((l) => l.source === 'error')));
+});

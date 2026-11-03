@@ -1,6 +1,6 @@
 # Detour
 
-Money that follows a stranded traveller. When a business traveller's flight is cancelled or badly delayed, Detour pays them a daily allowance for meals and taxis, at that city's rate, before they have to ask. Hotel nights go on a virtual Airwallex card that only hotels can charge, with a limit that always matches the nights approved. Later days and nights are scheduled rather than paid, and are dropped if the traveller gets home sooner, so money for days not stranded never leaves the company. As the disruption changes, the agent changes the payments, and anything over policy goes to the travel manager with the evidence attached. When the trip ends, Detour works out what the airline owes and writes the claim.
+Money that follows a stranded traveller. When a business traveller's flight is cancelled or badly delayed, Detour gives them a virtual Airwallex card for meals and taxis, at that city's rate, before they have to ask. The card only works at restaurants and taxis, its limit grows or shrinks with the stay, and it closes when the trip ends. The hotel is paid directly to the hotel, so there is nothing to pay at the desk; later nights are scheduled and cancelled if the traveller gets home sooner, so money for days not stranded never leaves the company. Every payment comes from the company's own Airwallex balance, which the travel manager sees in the app. As the disruption changes, the agent changes the payments, and anything over policy goes to the travel manager with the evidence attached. When the trip ends, Detour works out what the airline owes and writes the claim.
 
 Built for the Airwallex Agentic Banking Hackathon (build period from 27 Oct 2026).
 
@@ -29,16 +29,16 @@ The phone app is a Progressive Web App (manifest, icons, service worker): on And
 
 1. The travel manager signs up the company (or opens the demo company) and adds a trip: the traveller's name, email and flights. Detour checks the airport codes, that no flight is in the past, that flights are in time order, and that connections link up: flights less than a day apart must leave from where the last one landed, while a longer gap is a stay, so a return days later or a flight home from another city is fine. It does not yet check that a flight number really flies that day: a live version would ask a flight-status service (FlightAware, Cirium, AeroDataBox) and then follow the flights through it, in place of the scripted feed.
 2. Detour makes an invite link and QR code. The manager can send it again (a fresh link) or remove the trip.
-3. The traveller opens Detour with that email and checks the trip. If the flights are not theirs, they tap "This isn't my trip" and the manager is told. Otherwise they add a mobile number and the bank account for allowances (only the last four digits are kept), and sees the route on a map.
+3. The traveller opens Detour with that email and checks the trip. If the flights are not theirs, they tap "This isn't my trip" and the manager is told. Otherwise they add a mobile number, then the date of birth and home address a card in their name needs (no bank account), and see the route on a map.
 4. When a flight is disrupted, money moves on its own within policy. Anything over policy waits for the manager's approval.
-5. When the trip ends, the hotel card closes, unused payments are cancelled, and the airline claim is ready. The manager marks it as sent, then settled.
+5. When the trip ends, the card closes, unused hotel nights are cancelled, and the airline claim is ready. The manager marks it as sent, then settled. The company balance (More → Payments, or the panel on Home) is read live from Airwallex, with what is set aside for open trips and how to add funds.
 
 Settings in `.env` (git-ignored):
 
 | Variable | What it does |
 |---|---|
 | `AIRWALLEX_CLIENT_ID`, `AIRWALLEX_API_KEY` | Airwallex sandbox scoped key. The account must be registered in a region where Airwallex Issuing works (Singapore is used) |
-| `FUNDING` | `hotel-card` (default): allowance by Airwallex transfer, hotel nights on an Airwallex hotels-only card. `hotel-card-local`: the same, simulated. `transfers` / `transfers-local`: transfers only, the hotel paid by transfer. `cards` / `cards-local`: everything on one card. The app always shows which one is running |
+| `FUNDING` | `meal-card` (default): meals and taxis on the traveller's Airwallex card, the hotel paid directly by Airwallex transfer. `meal-card-local`: the same, simulated. `hotel-card` / `hotel-card-local`: allowance by transfer, hotel nights on a hotels-only card. `transfers` / `transfers-local`: transfers only, the hotel paid by transfer. `cards` / `cards-local`: everything on one card. The app always shows which one is running |
 | `DEEPSEEK_API_KEY` | Turns on the DeepSeek agent. Without it, a keyword stand-in is used, and the app says so |
 | `DEEPSEEK_MODEL` | Default `deepseek-flash` |
 
@@ -59,4 +59,4 @@ Airlines write to the traveller, not to Detour. Messages land in the traveller a
 
 ## Status
 
-Runs live on the Airwallex sandbox (Singapore account). Tested end to end on 1 to 3 Nov 2026: allowance transfers with EUR to SGD conversion, scheduled transfers cancelled, a hotels-only card issued, charged for night 1, raised for night 2, lowered when night 2 was not needed, a restaurant charge declined by the card's merchant rule, and the card closed at the end of the trip. Ada's trip ends with a UK261 claim: 520 GBP for her and 360 EUR back to the company.
+Runs live on the Airwallex sandbox (Singapore account). Tested end to end on 3 Nov 2026 with the default `meal-card` mode: Ada's card issued for meals and taxis (EUR 120, raised to EUR 180 when she has to stay), a EUR 18.40 dinner approved, EUR 399 of headphones declined by the card's merchant rule, the hotel paid directly by transfer for night 1, night 2 scheduled after approval and cancelled when an earlier seat opened, the card closed when she landed, and a UK261 claim: 520 GBP for her and 198.40 EUR of care costs back to the company. The company balance is read live from Airwallex. The `hotel-card` and `transfers` modes were tested live on 1 Nov 2026.

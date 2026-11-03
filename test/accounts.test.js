@@ -26,7 +26,7 @@ test("inviting Ada links her to the scripted trip, and the story is ready once s
   assert.equal(inv.live, true);
   assert.deepEqual(inv.flights.map((f) => f.id), ['DA779', 'DA908']);
   assert.equal(accounts.liveReady(), false);
-  accounts.register({ token: inv.token, phone: '+65 9123 4567', bank: { country: 'SG', holder: 'Ada Lim', account: '1234567890', code: 'DBSSSGSG' } });
+  accounts.register({ token: inv.token, phone: '+65 9123 4567', dob: '1990-04-12', address: { line1: '1 Raffles Place', city: 'Singapore', postcode: '048616', country: 'SG' } });
   assert.equal(accounts.liveReady(), true);
   accounts.reset();
   assert.equal(accounts.liveReady(), false);
@@ -56,16 +56,18 @@ test('sign-up and policy edits reject bad input', () => {
   assert.throws(() => accounts.updatePolicy({ auto_nights: 1, max_auto_raise_pct: 50, cities: { FRA: { meals: -1, transport: 1, lodging: 1 } } }), /meals/);
 });
 
-test('an invite can be found by email or link, and registration keeps only the last four digits', () => {
+test('an invite can be found by email or link, and registration takes what a card in their name needs', () => {
   const { accounts } = setup();
   const inv = accounts.invite({ name: 'Lena Hart', email: 'Lena@Northwind.example', flights: [flight] });
   assert.equal(inv.email, 'lena@northwind.example');
   assert.equal(accounts.find({ email: 'lena@northwind.example' }).token, inv.token);
   assert.equal(accounts.find({ token: inv.token }).name, 'Lena Hart');
   assert.throws(() => accounts.invite({ name: 'Lena', email: 'lena@northwind.example', flights: [flight] }), /already has a trip/);
-  const reg = accounts.register({ token: inv.token, phone: '+49 151 2345678', bank: { country: 'DE', holder: 'Lena Hart', account: 'DE89 3704 0044 0532 0130 00', code: 'cobadeff' } });
-  assert.deepEqual(reg.bank, { country: 'DE', holder: 'Lena Hart', last4: '3000', code: 'COBADEFF' });
-  assert.equal(JSON.stringify(accounts.view()).includes('0532'), false);
+  const reg = accounts.register({ token: inv.token, phone: '+49 151 2345678', dob: '1988-02-29', address: { line1: 'Kaiserstr. 1', city: 'Frankfurt', postcode: '60311', country: 'de' } });
+  assert.deepEqual(reg.address, { line1: 'Kaiserstr. 1', city: 'Frankfurt', postcode: '60311', country: 'DE' });
+  assert.equal(reg.bank, undefined);
+  assert.throws(() => accounts.register({ token: inv.token, phone: '+49 151 2345678', dob: new Date(Date.now() - 10 * 365 * 864e5).toISOString().slice(0, 10), address: reg.address }), /18 or older/);
+  assert.throws(() => accounts.register({ token: inv.token, phone: '+49 151 2345678', dob: '1988-02-29', address: { country: 'DE' } }), /home address/);
   assert.equal(accounts.view().invites.find((i) => i.token === inv.token).registered, true);
 });
 
@@ -78,7 +80,7 @@ test('invites need a real flight, and unknown or expired invites are refused', (
   const inv = accounts.invite({ name: 'X', email: 'x@y.example', flights: [flight] });
   accounts.invites.find((i) => i.token === inv.token).expiresAt = Date.now() - 1;
   assert.equal(accounts.find({ token: inv.token }).expired, true);
-  assert.throws(() => accounts.register({ token: inv.token, phone: '+1 555 0100 222', bank: { holder: 'X', account: '12345678', code: 'X' } }), /expired/);
+  assert.throws(() => accounts.register({ token: inv.token, phone: '+1 555 0100 222', dob: '1990-04-12', address: { line1: '1 Raffles Place', city: 'Singapore', postcode: '048616', country: 'SG' } }), /expired/);
 });
 
 test('an invite can be sent again with a fresh link, or removed with its registration', () => {
@@ -88,7 +90,7 @@ test('an invite can be sent again with a fresh link, or removed with its registr
   assert.notEqual(again.token, inv.token);
   assert.throws(() => accounts.find({ token: inv.token }), /not valid/);
   assert.equal(accounts.find({ token: again.token }).email, 'lena@northwind.example');
-  accounts.register({ token: again.token, phone: '+49 151 2345678', bank: { country: 'DE', holder: 'Lena Hart', account: '12345678', code: 'COBADEFF' } });
+  accounts.register({ token: again.token, phone: '+49 151 2345678', dob: '1990-04-12', address: { line1: '1 Raffles Place', city: 'Singapore', postcode: '048616', country: 'SG' } });
   accounts.remove({ token: again.token });
   assert.equal(accounts.view().invites.length, 0);
   assert.throws(() => accounts.find({ email: 'lena@northwind.example' }), /no trip/);

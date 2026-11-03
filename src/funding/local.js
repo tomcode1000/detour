@@ -15,6 +15,10 @@ export function createLocalFunding({ clock }) {
   return {
     kind: 'card',
     name: 'local',
+    // LOCAL SIMULATION: fixed demo balances.
+    async balances() {
+      return ['EUR', 'SGD', 'GBP', 'USD'].map((currency) => ({ currency, available: 250000, pending: 0 }));
+    },
     label: 'Local simulation · card (not Airwallex)',
 
     async issue({ controls, requestId }) {

@@ -114,6 +114,7 @@ h1.title { font-size: 21px; line-height: 1.2; font-weight: 600; letter-spacing: 
 .list > .card .row + .row { border-top: 0; }
 
 .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none; color: var(--cyan); background: rgba(169, 191, 214, .12); }
+.ic.plain { font-size: 12px; font-weight: 600; }
 .ic .i { width: 19px; height: 19px; }
 .ic.plain { background: none; width: 30px; }
 .ic.green { color: var(--green); background: var(--green-bg); }

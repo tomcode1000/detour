@@ -38,7 +38,8 @@ export function paymentsFor(controls) {
 
 const HOTEL_MCCS = ['7011'];
 
-export function createTransferFunding({ clock, backend, payees, hotelCard = null, traveller = null }) {
+// `roles` limits which payments this funding makes (['hotel'] when the card covers the rest).
+export function createTransferFunding({ clock, backend, payees, hotelCard = null, traveller = null, roles = null }) {
   const ledger = [];
   let allowance = null;
   let current = null; // the plan being paid, so the hotel payee matches the stranded city
@@ -110,7 +111,7 @@ export function createTransferFunding({ clock, backend, payees, hotelCard = null
   async function reconcile(controls) {
     current = controls;
     await tick();
-    const want = paymentsFor(controls);
+    const want = paymentsFor(controls).filter((i) => !roles || roles.includes(i.role));
     if (hotelCard) await syncCard(controls, want);
     const created = [];
     const cancelled = [];
@@ -128,7 +129,7 @@ export function createTransferFunding({ clock, backend, payees, hotelCard = null
     if (card && cancelled.some((l) => l.method === 'card')) await syncCard(controls, want);
     // Approved one-off raises go to the traveller straight away, as top-ups.
     const extrasPaid = round2(ledger.filter((l) => l.key.startsWith('extra') && l.status !== 'CANCELLED').reduce((s, l) => s + l.amount, 0));
-    const extraDue = round2((controls.breakdown.extras || 0) - extrasPaid);
+    const extraDue = roles && !roles.includes('traveller') ? 0 : round2((controls.breakdown.extras || 0) - extrasPaid);
     if (extraDue > 0) {
       const n = ledger.filter((l) => l.key.startsWith('extra')).length + 1;
       created.push(await place({ key: `extra-${n}`, role: 'traveller', what: 'Approved extra', amount: extraDue, currency: controls.currency, payAt: clock() }));

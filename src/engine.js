@@ -80,6 +80,10 @@ export class Engine {
   }
 
   get mode() { return this.funding.kind; } // 'card' | 'transfer'
+  // Which story events apply: 'card' (everything on the card), 'meal-card' (card for meals and
+  // taxis, hotel paid directly) or 'transfer'.
+  get variant() { return this.funding.variant || this.mode; }
+  get hotelDirect() { return this.mode === 'transfer' || Boolean(this.funding.hotelDirect); }
 
   async notify(notice) {
     this.doing(`Messaging ${this.scenario.traveller.first_name}`);
@@ -99,7 +103,8 @@ export class Engine {
   // ---------------------------------------------------------------- playing the story
   // Events marked for the other funding mode (e.g. card payments at a till) are skipped.
   skipOtherMode() {
-    while (!this.finishedRaw && this.scenario.events[this.cursor].mode && this.scenario.events[this.cursor].mode !== this.mode) this.cursor++;
+    const applies = (m) => !m || (Array.isArray(m) ? m : [m]).includes(this.variant);
+    while (!this.finishedRaw && !applies(this.scenario.events[this.cursor].mode)) this.cursor++;
   }
   get finishedRaw() { return this.cursor >= this.scenario.events.length; }
   get finished() { this.skipOtherMode(); return this.finishedRaw; }
@@ -275,6 +280,7 @@ export class Engine {
       activeTo: rules.activeUntil({ start: d.start, next, now: this.clock, policy: this.policy }),
       extras: extras ?? this.card?.extras ?? 0,
       extraCategories: extraCategories ?? this.card?.extraCategories ?? [],
+      hotelDirect: Boolean(this.funding.hotelDirect),
     });
     return { ...planned, tz: city.tz, city: city.city, airport: d.airport };
   }
@@ -292,7 +298,7 @@ export class Engine {
     this.card = { ...rest, controls, approvedNights: 0, grantedNights: 0, declinedNights: 0, extras: 0, extraCategories: [] };
     const payments = this.paymentsText(changes);
     if (this.mode === 'transfer') this.record('money', `Allowance opened (${fmtMoney(controls.limit, controls.currency)} planned). Detour ${payments}.`, { requestId });
-    else this.record('card', `Card issued: ${fmtMoney(controls.limit, controls.currency)} for ${controls.categories.join(', ')}, until ${this.when(controls.activeTo)}.`, { requestId });
+    else this.record('card', `Card issued: ${fmtMoney(controls.limit, controls.currency)} for ${controls.categories.join(', ')}, until ${this.when(controls.activeTo)}.${payments ? ` Detour ${payments}.` : ''}`, { requestId });
     await this.notify({ type: 'issued', reason: this.reasonInWords(reason), payments });
   }
 
@@ -308,8 +314,8 @@ export class Engine {
       this.record('money', `Plan updated (${what}). ${payments ? `Detour ${payments}.` : 'No payment changes.'}`);
       if (payments) await this.notify({ type: 'updated', change: what, payments, prefix });
     } else {
-      this.record('card', `Card updated: ${what}.`);
-      await this.notify({ type: 'updated', change: what, prefix });
+      this.record('card', `Card updated: ${what}.${payments ? ` Detour ${payments}.` : ''}`);
+      await this.notify({ type: 'updated', change: what, prefix, payments });
     }
   }
 
@@ -319,7 +325,7 @@ export class Engine {
     this.card.status = status;
     const payments = this.paymentsText(res?.changes);
     if (this.mode === 'transfer') this.record('money', `Allowance ${status === 'INACTIVE' ? 'stopped' : status.toLowerCase()}. ${payments ? `Detour ${payments}.` : 'Nothing left to cancel.'}`);
-    else this.record('card', `Card ${status === 'INACTIVE' ? 'switched off' : status.toLowerCase()}.`);
+    else this.record('card', `Card ${status === 'INACTIVE' ? 'switched off' : status.toLowerCase()}.${payments ? ` Detour ${payments}.` : ''}`);
     return payments;
   }
 
@@ -449,7 +455,7 @@ export class Engine {
 
     // With transfers the hotel is paid directly, and everything planned is already sent or
     // scheduled, so any extra the traveller asks for is a raise.
-    if (this.mode === 'transfer' && p.category === 'lodging' && this.card?.controls.categories.includes('lodging')) {
+    if (this.hotelDirect && p.category === 'lodging' && this.card?.controls.nights > 0) {
       return { result: 'covered_direct', mode: this.mode };
     }
     const spent = this.mode === 'transfer' ? (this.card?.controls.limit ?? 0) : this.spent;
@@ -544,17 +550,30 @@ export class Engine {
       const cat = Object.entries(this.policy.categories).find(([, c]) => c.mccs.includes(t.mcc))?.[0] || 'other';
       byCategory[cat] = Math.round(((byCategory[cat] || 0) + t.amount) * 100) / 100;
     }
+    const ledger = this.funding.ledger ? this.funding.ledger() : [];
+    const sumOf = (rows) => Math.round(rows.reduce((s, l) => s + l.amount, 0) * 100) / 100;
+    const hotelPaid = ledger.filter((l) => l.role === 'hotel' && l.status === 'SENT');
     this.summary = {
+      mode: this.variant,
       currency: this.card?.controls.currency,
       spent: Math.round(this.spent * 100) / 100,
       limit: this.card?.controls.limit,
       byCategory,
       declined: this.transactions.filter((t) => t.status !== 'APPROVED').length,
+      toHotel: sumOf(hotelPaid),
+      cancelled: sumOf(ledger.filter((l) => l.status === 'CANCELLED')),
+      unused: Math.round(Math.max(0, (this.card?.controls.limit || 0) - this.spent) * 100) / 100,
       nights: this.card?.controls.nights ?? 0,
       approvals: this.approvals.filter((a) => a.status === 'APPROVED').length,
     };
-    this.record('card', `Trip over. Spent ${fmtMoney(this.summary.spent, this.summary.currency || '')} of ${fmtMoney(this.summary.limit || 0, this.summary.currency || '')}.`);
-    if (this.card) await this.notify({ type: 'closed', spent: this.summary.spent, currency: this.summary.currency });
+    const s = this.summary;
+    this.record('card', `Trip over. Spent ${fmtMoney(s.spent, s.currency || '')} of ${fmtMoney(s.limit || 0, s.currency || '')} on the card${hotelPaid.length ? `; ${fmtMoney(s.toHotel, s.currency)} paid to the hotel` : ''}.`);
+    // Care costs for the claim: what was spent on meals and taxis, and the hotel nights paid.
+    const care = approved.filter((t) => ['meals', 'transport'].includes(Object.entries(this.policy.categories).find(([, c]) => c.mccs.includes(t.mcc))?.[0]))
+      .map((t) => ({ what: t.merchant, amount: t.amount, currency: t.currency }))
+      .concat(hotelPaid.map((l) => ({ what: l.what, amount: l.amount, currency: l.currency })));
+    this.prepareClaim(care);
+    if (this.card) await this.notify({ type: 'closed', spent: s.spent, currency: s.currency, toHotel: s.toHotel, claim: this.claimNotice() });
   }
 
   // After a disruption, what the airline owes: compensation for the traveller, and the
@@ -626,6 +645,7 @@ export class Engine {
       scene: this.scene,
       progress: { at: this.cursor, total: this.scenario.events.length, finished: this.finished, waiting: this.waiting && this.approvals.some((a) => a.status === 'PENDING'), next: next ? next.type : null },
       mode: this.mode,
+      variant: this.variant,
       adapters: { funding: this.funding.label, fundingName: this.funding.name, agent: this.agent.label, agentName: this.agent.name },
       payments: this.funding.ledger ? this.funding.ledger() : null,
       hotelCard: this.funding.hotelCard ? this.funding.hotelCard() : null,
