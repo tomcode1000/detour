@@ -79,7 +79,7 @@ function describeTransferNotice(notice, policy) {
     case 'closed': {
       const s = notice.summary;
       const c = notice.claim;
-      const claim = c ? ` One more thing: under ${c.scheme}, ${c.airline} likely owes you ${fmtMoney(c.compensation, c.compCurrency)} for arriving this late. I've written the claim for you - it's in your Trips tab.` : '';
+      const claim = c ? ` One more thing: under ${c.scheme}, ${c.airline} likely owes you ${fmtMoney(c.compensation, c.compCurrency)} for arriving this late${c.passOn ? `, which ${c.company}'s policy asks you to pass on to the company` : ''}. I've written the claim - it's in your Trips tab.` : '';
       return `You've landed. In total Detour sent you ${fmtMoney(s.toTraveller, s.currency)} and paid the hotel ${fmtMoney(s.toHotel, s.currency)}. No receipts to collect.${claim}`;
     }
     default: return notice.text || '';
@@ -91,7 +91,7 @@ export function describeNotice(notice, card, policy) {
   if (notice.mode === 'transfer') return describeTransferNotice(notice, policy);
   const facts = card ? describeCard(card, policy, notice.spent || 0) : '';
   const also = notice.payments ? ` Detour has also ${notice.payments}.` : '';
-  const claimLine = (c) => (c ? ` One more thing: under ${c.scheme}, ${c.airline} likely owes you ${fmtMoney(c.compensation, c.compCurrency)} for arriving this late. I've written the claim for you - it's in your Trips tab.` : '');
+  const claimLine = (c) => (c ? ` One more thing: under ${c.scheme}, ${c.airline} likely owes you ${fmtMoney(c.compensation, c.compCurrency)} for arriving this late${c.passOn ? `, which ${c.company}'s policy asks you to pass on to the company` : ''}. I've written the claim - it's in your Trips tab.` : '');
   switch (notice.type) {
     case 'issued':
       return `${notice.reason}. Detour has set up your Detour card: ${facts}. It's in the Detour app.${also}`;

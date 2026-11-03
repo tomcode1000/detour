@@ -588,6 +588,7 @@ export class Engine {
       booked: this.scenario.legs.map((id) => this.normalFlight(this.scenario.flights[id])),
       flown: this.legs.map((id) => this.flights[id]),
       care,
+      compensationTo: this.policy.rules.compensation_to,
     });
     const c = this.claim;
     c.status = 'READY';
@@ -608,7 +609,7 @@ export class Engine {
 
   claimNotice() {
     const c = this.claim;
-    return c?.eligible ? { airline: c.airline, scheme: c.scheme, compensation: c.compensation.amount, compCurrency: c.compensation.currency, care: c.care.total, careCurrency: c.care.currency } : null;
+    return c?.eligible ? { airline: c.airline, scheme: c.scheme, passOn: c.compensation.passOn, company: this.policy.company.replace(/\s*\(.*\)/, ''), compensation: c.compensation.amount, compCurrency: c.compensation.currency, care: c.care.total, careCurrency: c.care.currency } : null;
   }
 
   closeOutTransfers() {

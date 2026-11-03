@@ -47,3 +47,27 @@ test("Ada's trip ends with a claim: UK261 compensation for her, care costs back 
   assert.match(c.letter, /refund them to/);
   assert.match(e.messages.at(-1).text, /520/);
 });
+
+test("compensation stays the traveller's by default; a company policy can ask for it to be passed on", async () => {
+  const run = async (compensationTo) => {
+    const policy = load('../config/policy.json');
+    policy.rules.compensation_to = compensationTo;
+    const scenario = load('../scenarios/ada-frankfurt.json');
+    const e = new Engine({ scenario, policy, agent: createStandinAgent(), runId: 'test',
+      makeFunding: ({ clock, runKey }) => createFunding({ env: { FUNDING: 'meal-card-local' }, clock, runKey, scenario, policy }) });
+    while (!e.finished) {
+      if (e.waiting && e.approvals.some((a) => a.status === 'PENDING')) { await e.decide(e.approvals.find((a) => a.status === 'PENDING').id, 'approve'); continue; }
+      if (!(await e.step())) break;
+    }
+    return e;
+  };
+  const keep = await run('traveller');
+  assert.equal(keep.claim.compensation.passOn, false);
+  assert.doesNotMatch(keep.messages.at(-1).text, /pass on/);
+  const pass = await run('company');
+  assert.equal(pass.claim.compensation.passOn, true);
+  assert.equal(pass.claim.compensation.amount, 520, 'the amount is set by law either way');
+  assert.equal(pass.claim.care.total, keep.claim.care.total, 'care costs are separate and unchanged');
+  assert.match(pass.messages.at(-1).text, /pass on to the company/);
+  assert.equal(pass.claim.letter, keep.claim.letter, 'the letter to the airline is the same: it claims in the passenger name');
+});

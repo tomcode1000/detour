@@ -118,3 +118,13 @@ test('the traveller can say the trip is not theirs, and the manager sees it', ()
   assert.ok(accounts.view().invites[0].disputed.at);
   assert.ok(accounts.find({ token: inv.token }).disputed);
 });
+
+test('the policy says who keeps airline compensation, and rejects anything else', () => {
+  const { policy, accounts } = setup();
+  assert.equal(policy.rules.compensation_to, 'traveller');
+  accounts.updatePolicy({ auto_nights: 1, max_auto_raise_pct: 50, compensation_to: 'company' });
+  assert.equal(policy.rules.compensation_to, 'company');
+  assert.throws(() => accounts.updatePolicy({ auto_nights: 1, max_auto_raise_pct: 50, compensation_to: 'airline' }), /who keeps/);
+  accounts.reset();
+  assert.equal(policy.rules.compensation_to, 'traveller');
+});

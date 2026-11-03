@@ -116,6 +116,9 @@ export class Accounts {
     const raise = Number(p.max_auto_raise_pct);
     if (!Number.isInteger(nights) || nights < 0 || nights > 5) throw new Error('Nights covered automatically must be between 0 and 5.');
     if (!(raise >= 0 && raise <= 200)) throw new Error('The approval threshold must be between 0% and 200%.');
+    // Airline compensation is the passenger's by law; a company may ask for it to be passed on.
+    const compTo = p.compensation_to ?? this.policy.rules.compensation_to ?? 'traveller';
+    if (!['traveller', 'company'].includes(compTo)) throw new Error('Choose who keeps airline compensation.');
     for (const [code, r] of Object.entries(p.cities || {})) {
       if (!this.policy.cities[code]) throw new Error(`Unknown city ${code}.`);
       for (const k of ['meals', 'transport', 'lodging']) {
@@ -125,6 +128,7 @@ export class Accounts {
     return () => {
       this.policy.rules.auto_nights = nights;
       this.policy.rules.max_auto_raise_pct = raise;
+      this.policy.rules.compensation_to = compTo;
       for (const [code, r] of Object.entries(p.cities || {})) {
         Object.assign(this.policy.cities[code], { meals_per_day: Number(r.meals), transport: Number(r.transport), lodging_per_night: Number(r.lodging) });
       }

@@ -128,13 +128,29 @@ export function createEmails({ mailer, env, engine, accounts, baseUrl }) {
         subject: c ? `Trip resolved, and ${c.airline} likely owes you ${fmtMoney(c.compensation.amount, c.compensation.currency)}` : 'Your trip is resolved',
         html: layout({
           title: 'Trip resolved',
-          intro: `You're on your way. Your Detour card is closed, and there are no receipts to keep.${c ? ` Under ${c.scheme}, ${c.airline} likely owes you compensation for arriving ${c.delayText} late. Detour has written the claim letter: it's in the Trips tab.` : ''}`,
+          intro: `You're on your way. Your Detour card is closed, and there are no receipts to keep.${c ? ` Under ${c.scheme}, ${c.airline} likely owes you compensation for arriving ${c.delayText} late${c.compensation.passOn ? `; ${company()}'s policy asks you to pass it on to the company when it arrives` : ''}. Detour has written the claim letter: it's in the Trips tab.` : ''}`,
           rows: [
             ...(s.mode === 'transfer' ? [['Sent to you', fmtMoney(s.toTraveller, s.currency)]] : [['Spent on your card', fmtMoney(s.spent, s.currency)]]),
             ...(s.toHotel ? [['Hotel, paid directly', fmtMoney(s.toHotel, s.currency)]] : []),
-            ...(c ? [['Claim for you', fmtMoney(c.compensation.amount, c.compensation.currency)]] : []),
+            ...(c ? [[c.compensation.passOn ? 'Compensation (passed to the company)' : 'Compensation, yours', fmtMoney(c.compensation.amount, c.compensation.currency)]] : []),
           ],
           button: c ? { label: 'See the claim', href: app } : { label: 'Open Detour', href: app },
+        }),
+      });
+      // The manager files the claim: the care costs come back to the company.
+      deliver({
+        to: accounts.company.email, name: accounts.company.manager, key: `${run()}-closed-manager`,
+        subject: c ? `Trip closed: ${fmtMoney(c.care.total, c.care.currency)} to reclaim from ${c.airline}` : `Trip closed: ${tName}`,
+        html: layout({
+          title: `${tName.split(' ')[0]}'s trip is closed`,
+          intro: `${tName} is on the way. The Detour card is closed and unused hotel nights were cancelled before they were paid.${c ? ` Detour has written the claim to ${c.airline} in ${tName.split(' ')[0]}'s name: send it, then mark it as sent in Detour.` : ''}`,
+          rows: [
+            ...(s.mode === 'transfer' ? [['Sent to the traveller', fmtMoney(s.toTraveller, s.currency)]] : [['Spent on the card', fmtMoney(s.spent, s.currency)]]),
+            ...(s.toHotel ? [['Paid to the hotel', fmtMoney(s.toHotel, s.currency)]] : []),
+            ...(c ? [['Care costs back to the company', fmtMoney(c.care.total, c.care.currency)], [c.compensation.passOn ? `Compensation, passed on by ${tName.split(' ')[0]}` : `Compensation, ${tName.split(' ')[0]}'s by law`, fmtMoney(c.compensation.amount, c.compensation.currency)]] : []),
+          ],
+          button: c ? { label: 'Send the claim', href: `${baseUrl()}/manager?tab=claim` } : { label: 'Open Detour', href: `${baseUrl()}/manager` },
+          foot: c ? 'The care costs (meals, taxis, hotel) are owed even if the airline cites extraordinary circumstances. Compensation is set by law and paid to the passenger.' : undefined,
         }),
       });
     }

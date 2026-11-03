@@ -11,7 +11,8 @@
     "max_auto_raise_pct": 50,
     "rebook_buffer_hours": 6,
     "provisional_hours": 24,
-    "lodging_factor": 1.2
+    "lodging_factor": 1.2,
+    "compensation_to": "traveller"
   },
   "categories": {
     "meals": { "label": "Meals", "mccs": ["5812", "5814"] },

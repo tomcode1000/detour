@@ -116,7 +116,7 @@ let toastTimer;
 function claimRow(c) {
   if (!c?.eligible) return '';
   const parts = [];
-  if (c.compensation.amount) parts.push(`${money(c.compensation.amount, c.compensation.currency, { maximumFractionDigits: 0 })} for ${c.compensation.owedTo.split(' ')[0]}`);
+  if (c.compensation.amount) parts.push(`${money(c.compensation.amount, c.compensation.currency, { maximumFractionDigits: 0 })} ${c.compensation.passOn ? 'compensation, passed on' : `for ${c.compensation.owedTo.split(' ')[0]}`}`);
   if (c.care.total) parts.push(`${money(c.care.total, c.care.currency, { maximumFractionDigits: 0 })} back to ${c.care.owedTo.replace(/\s*\(.*\)$/, '')}`);
   return `<div class="section-head"><h2>Airline claim</h2></div><div class="card"><button class="row tap" data-go="claim"><span class="ic green">${icon('doc')}</span><div class="grow"><b>Claim from ${esc(c.airline)}</b><small>${esc(parts.join(' · '))}</small></div>${claimPill(c)}${icon('chev-r', 'chev')}</button></div>`;
 }
@@ -129,7 +129,7 @@ function renderClaim(c, { manage = false } = {}) {
   if (!c?.eligible) { el.innerHTML = '<div class="empty">No claim yet. Detour prepares one when a disrupted trip ends.</div>'; return; }
   const company = c.care.owedTo.replace(/\s*\(.*\)$/, '');
   const rows = [];
-  if (c.compensation.amount) rows.push(`<div class="row"><span class="ic green">${icon('wallet')}</span><div class="grow"><b>Compensation</b><small>For ${esc(c.compensation.owedTo)} · ${esc(c.compensation.why)}</small></div><div class="end"><b>${money(c.compensation.amount, c.compensation.currency)}</b></div></div>`);
+  if (c.compensation.amount) rows.push(`<div class="row"><span class="ic green">${icon('wallet')}</span><div class="grow"><b>Compensation</b><small>For ${esc(c.compensation.owedTo)} · ${esc(c.compensation.why)}</small><small>${c.compensation.passOn ? `Paid to ${esc(c.compensation.owedTo.split(' ')[0])}; ${esc(company)}'s policy asks for it to be passed on` : `${esc(c.compensation.owedTo.split(' ')[0])}'s to keep: it is the passenger's by law`}</small></div><div class="end"><b>${money(c.compensation.amount, c.compensation.currency)}</b></div></div>`);
   if (c.care.total) rows.push(`<div class="row"><span class="ic purple">${icon('bed')}</span><div class="grow"><b>Meals, taxis and hotel</b><small>Back to ${esc(company)} · paid while stranded</small></div><div class="end"><b>${money(c.care.total, c.care.currency)}</b></div></div>`);
   el.innerHTML = `
     <div class="page-head"><h1 class="title">Claim from ${esc(c.airline)}</h1><p class="sub">${esc(c.from)} → ${esc(c.to)} arrived ${esc(c.delayText)} late. Written under ${esc(c.scheme)}.</p></div>

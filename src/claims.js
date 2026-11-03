@@ -57,7 +57,9 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 // booked: the flights on the ticket; flown: the flights actually taken (both in order).
 // care: what Detour paid for meals, transport and the hotel ([{ what, amount, currency }]).
-export function claimFor({ airline, traveller, company, booked, flown, care }) {
+// compensationTo: 'traveller' (the law: it is the passenger's) or 'company' (company policy asks the
+// traveller to pass it on). Either way the airline pays the passenger; the letter does not change.
+export function claimFor({ airline, traveller, company, booked, flown, care, compensationTo = 'traveller' }) {
   const from = booked[0].from; const to = booked.at(-1).to;
   const scheme = schemeFor(from, to, airline.region);
   const scheduledArr = booked.at(-1).sched_arr;
@@ -74,7 +76,7 @@ export function claimFor({ airline, traveller, company, booked, flown, care }) {
   const law = SCHEMES[scheme].law;
   const claim = {
     ...base, scheme, law, eligible: comp.amount > 0 || careTotal > 0,
-    compensation: { ...comp, owedTo: traveller, why: comp.amount ? `${km.toLocaleString('en-GB')} km journey arriving ${hours(delayMins)} late` : 'arrived less than 3 hours late' },
+    compensation: { ...comp, owedTo: traveller, passOn: compensationTo === 'company', why: comp.amount ? `${km.toLocaleString('en-GB')} km journey arriving ${hours(delayMins)} late` : 'arrived less than 3 hours late' },
     care: { items: care, total: careTotal, currency: careCurrency, owedTo: company },
     caveats: [
       'Compensation is not owed if the airline shows the disruption was caused by extraordinary circumstances (for example severe weather or air traffic control). Meals, hotel and transport are owed either way.',

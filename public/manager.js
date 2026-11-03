@@ -82,6 +82,7 @@ function fillPolicyFields(box) {
       <label class="field"><span>Nights covered automatically</span><select name="nights">${opt([0, 1, 2, 3], r.auto_nights, (v) => `${v} night${v === 1 ? '' : 's'}`)}</select></label>
       <label class="field"><span>Approval needed above</span><select name="raise">${opt([25, 50, 75, 100], r.max_auto_raise_pct, (v) => `+${v}%`)}</select></label>
     </div>
+    <label class="field"><span>Airline compensation</span><select name="comp">${opt(['traveller', 'company'], r.compensation_to || 'traveller', (v) => (v === 'traveller' ? 'The traveller keeps it (the law)' : 'The traveller passes it on to the company'))}</select><small>By law the airline pays compensation to the passenger. Meals, taxis and hotel costs always come back to the company.</small></label>
     <div class="section-head" style="padding-top:2px"><h2>City rates</h2></div>
     ${Object.entries(S.policy.cities).map(([code, c]) => `
       <div class="card flight-form" data-city="${code}">
@@ -98,7 +99,7 @@ function readPolicyFields(form) {
   form.querySelectorAll('[data-city]').forEach((el) => {
     cities[el.dataset.city] = { meals: Number(el.querySelector('[name=meals]').value), transport: Number(el.querySelector('[name=transport]').value), lodging: Number(el.querySelector('[name=lodging]').value) };
   });
-  return { auto_nights: Number(form.querySelector('[name=nights]').value), max_auto_raise_pct: Number(form.querySelector('[name=raise]').value), cities };
+  return { auto_nights: Number(form.querySelector('[name=nights]').value), max_auto_raise_pct: Number(form.querySelector('[name=raise]').value), compensation_to: form.querySelector('[name=comp]').value, cities };
 }
 onView('signup2', () => { const box = document.querySelector('#su2-form .policy-fields'); if (!box.children.length) fillPolicyFields(box); });
 onView('policyedit', () => fillPolicyFields(document.querySelector('#pe-form .policy-fields')));
@@ -537,6 +538,7 @@ function renderPolicy() {
     ['car', `Taxi & transport · ${home.city}`, `${money(home.transport, home.currency, { maximumFractionDigits: 0 })} / stay`],
     ['clock', 'Cover ends', `${r.rebook_buffer_hours}h after the next flight`],
     ['warn', 'Counts as disrupted', `${r.delay_threshold_hours}h+ late or cancelled`],
+    ['wallet', 'Airline compensation', r.compensation_to === 'company' ? 'Passed on to the company' : 'Kept by the traveller'],
   ];
   $('po-rules').innerHTML = rows.map(([ic, k, v]) => `<div class="row" style="min-height:52px"><span class="ic plain">${icon(ic)}</span><div class="grow"><span style="color:#d5e0ea">${esc(k)}</span></div><b style="font-weight:600">${esc(v)}</b></div>`).join('');
   $('po-cities').innerHTML = Object.entries(S.policy.cities).map(([code, c]) => `<div class="row"><span class="ic plain">${icon('pin')}</span><div class="grow"><b>${esc(c.city)}</b><small>${esc(code)}${c.hotel ? ` · ${esc(c.hotel.replace(/\s+GmbH$/, ''))}` : ''}</small></div><div class="end"><b>${money(c.meals_per_day, c.currency, { maximumFractionDigits: 0 })}</b><small>meals · hotel ${money(c.lodging_per_night * r.lodging_factor, c.currency, { maximumFractionDigits: 0 })}</small></div></div>`).join('');
