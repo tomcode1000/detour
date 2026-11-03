@@ -8,6 +8,8 @@ import { Engine } from './engine.js';
 import { createFunding } from './funding/index.js';
 import { createAgent } from './agent/index.js';
 import { Accounts } from './accounts.js';
+import { createMailer } from './notify/mailer.js';
+import { createEmails } from './notify/emails.js';
 
 const env = loadEnv();
 const load = (p) => JSON.parse(readFileSync(path.join(ROOT, p), 'utf8'));
@@ -24,9 +26,18 @@ const engine = new Engine({
 const accounts = new Accounts({ policy, scenario });
 const state = () => ({ ...engine.snapshot(), account: accounts.view() });
 
+// Links in emails point at the address people use to reach this server (PUBLIC_URL wins).
+let origin = env.PUBLIC_URL || `http://localhost:${env.PORT || 4100}`;
+const mailer = createMailer(env);
+const emails = createEmails({ mailer, env, engine, accounts, baseUrl: () => env.PUBLIC_URL || origin });
+
 const clients = new Set();
+let last = null;
 const broadcast = () => {
-  const data = `data: ${JSON.stringify(state())}\n\n`;
+  const now = state();
+  emails.onChange(last, now);
+  last = now;
+  const data = `data: ${JSON.stringify(now)}\n\n`;
   for (const res of clients) res.write(data);
 };
 engine.onChange(broadcast);
@@ -65,8 +76,8 @@ const actions = {
   'POST /api/signup': (b) => { const r = accounts.signup(b); broadcast(); return r; },
   'POST /api/signin': (b) => accounts.signin(b),
   'POST /api/policy': (b) => { const r = accounts.updatePolicy(b); broadcast(); return r; },
-  'POST /api/invite': (b) => { const r = accounts.invite(b); broadcast(); return r; },
-  'POST /api/invite/renew': (b) => { const r = accounts.renew(b); broadcast(); return r; },
+  'POST /api/invite': (b) => { const r = accounts.invite(b); broadcast(); emails.invite(r).then(broadcast); return r; },
+  'POST /api/invite/renew': (b) => { const r = accounts.renew(b); broadcast(); emails.invite(r).then(broadcast); return r; },
   'POST /api/invite/remove': (b) => {
     const inv = accounts.invites.find((i) => i.token === b.token);
     if (inv?.live && engine.cursor > 0) throw new Error("Ada's trip is running in the demo. Use Reset on the demo page to start again.");
@@ -86,6 +97,7 @@ const actions = {
 let balanceCache = null;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  if (req.headers.host && !/^localhost|^127\./.test(req.headers.host)) origin = `http://${req.headers.host}`;
 
   if (url.pathname === '/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -132,5 +144,5 @@ const port = Number(env.PORT || 4100);
 server.listen(port, () => {
   const snap = engine.snapshot();
   console.log(`Detour running at http://localhost:${port}`);
-  console.log(`Funding: ${snap.adapters.funding}   Agent: ${snap.adapters.agent}`);
+  console.log(`Funding: ${snap.adapters.funding}   Agent: ${snap.adapters.agent}   Email: ${mailer ? `UnitPost (${mailer.from})` : 'off'}`);
 });
