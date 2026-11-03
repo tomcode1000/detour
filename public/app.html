@@ -12,10 +12,12 @@
   <meta name="apple-mobile-web-app-title" content="Detour">
   <title>Detour</title>
   <script>
-    // Opening the installed app goes straight to the role chosen last time (unless ?choose).
+    // Opening the app goes straight back in only when someone is signed in for the role chosen
+    // last time. Otherwise (or with ?choose) it starts here, on choosing a role.
     try {
       const role = localStorage.getItem('detour.role');
-      if (role && !location.search.includes('choose')) location.replace(role === 'manager' ? '/manager' : '/traveller');
+      const signedIn = role && localStorage.getItem(role === 'manager' ? 'detour.manager' : 'detour.traveller');
+      if (signedIn && !location.search.includes('choose')) location.replace(role === 'manager' ? '/manager' : '/traveller');
     } catch {}
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
