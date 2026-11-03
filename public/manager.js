@@ -159,6 +159,13 @@ function momentsFor(a, b) {
     toast(`Paid ${parts.join(' and ')}.`);
   }
 
+  // A traveller says the trip on their invite is wrong.
+  for (const i of b.account?.invites || []) {
+    if (i.disputed && !(a.account?.invites || []).find((x) => x.token === i.token)?.disputed) {
+      moment({ tone: 'warn', icon: 'warn', title: `${i.name.split(' ')[0]} says this isn't their trip`, sub: `${i.name} checked the flights on the invite and they don't match. Remove the trip and add the right flights.`, primary: { label: 'Open the trip', go: 'trips' }, secondary: { label: 'Later' } });
+    }
+  }
+
   for (const m of b.inbox || []) {
     const old = (a.inbox || []).find((x) => x.id === m.id);
     if (m.verdict === 'suspicious' && old?.verdict !== 'suspicious') toast(`Detour caught a fake airline message sent to ${first()}. Nothing was paid.`);
@@ -225,7 +232,7 @@ function otherTripCard(t) {
 }
 function inviteCard(i) {
   const codes = [i.flights[0]?.from, ...i.flights.map((f) => f.to)].join(' → ');
-  return `<div class="card"><button class="row tap" data-trip="${esc(i.token)}"><span class="avatar md">${esc(initials(i.name))}</span><div class="grow"><b>${esc(i.name)}</b><small>${esc(i.role)} · ${esc(i.email)}</small><small style="color:var(--text);margin-top:6px">${icon('plane', 'c-cyan')} ${esc(codes)}</small></div><div class="end">${i.registered ? '<span class="pill ok">Registered</span>' : '<span class="pill info">Invited</span>'}</div></button></div>`;
+  return `<div class="card"><button class="row tap" data-trip="${esc(i.token)}"><span class="avatar md">${esc(initials(i.name))}</span><div class="grow"><b>${esc(i.name)}</b><small>${esc(i.role)} · ${esc(i.email)}</small><small style="color:var(--text);margin-top:6px">${icon('plane', 'c-cyan')} ${esc(codes)}</small></div><div class="end">${i.disputed ? '<span class="pill bad">Wrong trip</span>' : i.registered ? '<span class="pill ok">Registered</span>' : '<span class="pill info">Invited</span>'}</div></button></div>`;
 }
 
 // ---------------------------------------------------------------- approvals
@@ -315,7 +322,9 @@ function renderTrip() {
     legs = i.flights.map((f) => ({ id: f.id, from: f.from, to: f.to, dep: Date.parse(f.dep), status: 'SCHEDULED', statusText: 'on time' }));
     who = `<span class="avatar lg">${esc(initials(i.name))}</span><div><b>${esc(i.name)}</b><small>${esc(i.email)} · ${i.registered ? 'Registered' : 'Invited'}</small></div>`;
   }
+  const disputed = (openTrip === 'live' ? liveInvite() : (S.account?.invites || []).find((x) => x.token === openTrip))?.disputed;
   $('tr-who').innerHTML = who;
+  $('tr-flag').innerHTML = disputed ? `<div class="banner warn"><span class="badge">${icon('warn')}</span><div class="grow"><b>The traveller says this isn't their trip</b><small>Remove it and add the right flights. They get a new invite.</small></div></div>` : '';
   const d = openTrip === 'live' ? S.disruption : null;
   const state = (l) => (l.status === 'LANDED' || l.status === 'DEPARTED' ? 'done' : l.status === 'CANCELLED' || d?.missedFlight === l.id ? 'broken' : 'next');
   if (currentView === 'trip') drawRoute($('tr-map'), legs.map((l) => ({ from: l.from, to: l.to, state: state(l) })), { stay });

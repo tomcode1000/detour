@@ -74,6 +74,7 @@ const actions = {
   },
   'POST /api/claim': (b) => engine.setClaimStatus(String(b.status || '')),
   'POST /api/traveller/find': (b) => accounts.find(b),
+  'POST /api/traveller/dispute': (b) => { const r = accounts.dispute(b); broadcast(); return r; },
   'POST /api/traveller/register': (b) => { const r = accounts.register(b); broadcast(); return r; },
   'POST /api/airline-message': (b) => (b.text || b.inboxId ? engine.shareAirlineMessage({
     text: b.inboxId ? (() => { const m = engine.inbox.find((x) => x.id === b.inboxId); return m ? `${m.subject}\n\n${m.body}` : ''; })() : String(b.text),

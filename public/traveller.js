@@ -47,6 +47,7 @@ function enter(inv) {
     $('x-lede').textContent = `Ask ${inv.manager || 'your travel manager'} to send a new one.`;
     return go('expired', { replace: true });
   }
+  if (inv.disputed && !inv.registration) return showDisputed();
   if (inv.registration) {
     session.set({ token: inv.token, email: inv.email });
     showMain();
@@ -55,6 +56,17 @@ function enter(inv) {
   renderWelcome();
   go('welcome', { replace: true });
 }
+
+function showDisputed() {
+  $('d-lede').textContent = `We've told ${INV.manager || 'your travel manager'} the flights don't match your booking. You'll get a new invite with the right trip.`;
+  go('disputed', { replace: true });
+}
+$('w-wrong').onclick = async () => {
+  if (!confirm(`Tell ${INV.manager || 'your travel manager'} these flights are not your trip?`)) return;
+  const j = await api('/api/traveller/dispute', { token: INV.token });
+  if (j.ok) { INV.disputed = j.result.disputed; showDisputed(); }
+};
+$('d-again').onclick = () => { session.clear(); INV = null; go('signin', { replace: true }); };
 
 function showMain() {
   $('top-actions').hidden = false;

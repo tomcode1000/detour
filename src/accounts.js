@@ -2,11 +2,34 @@
 // registrations. Kept in memory and restored to the demo company on reset, because every visitor
 // shares one demo. Bank details are reduced to the last four digits before they are stored.
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { AIRPORTS } from './claims.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FLIGHT = /^[A-Z0-9]{2}\s?\d{1,4}[A-Z]?$/i;
 const AIRPORT = /^[A-Z]{3}$/;
 const INVITE_DAYS = 14;
+const DAY = 864e5;
+
+// What Detour can check without a flight-status service: real airport codes, a departure that is
+// not in the past, and flights that connect (each one leaves from where the last one landed, after
+// it left). A live version would also ask a flight-status service that the flight exists on that date.
+export function checkFlights(flights, now = Date.now()) {
+  flights.forEach((f, i) => {
+    const n = flights.length > 1 ? `Flight ${i + 1}: ` : '';
+    if (!FLIGHT.test(f.id)) throw new Error(`${n}use a flight number like LH403.`);
+    if (!AIRPORT.test(f.from) || !AIRPORT.test(f.to)) throw new Error(`${n}use three-letter airport codes like FRA.`);
+    for (const code of [f.from, f.to]) if (!AIRPORTS[code]) throw new Error(`${n}Detour doesn't know the airport ${code} yet. Check the code.`);
+    if (f.from === f.to) throw new Error(`${n}it leaves from and lands at the same airport.`);
+    if (!f.dep) throw new Error(`${n}add the departure date and time.`);
+    if (Date.parse(f.dep) < now - DAY) throw new Error(`${n}that departure is in the past. Check the date.`);
+    if (f.arr && Date.parse(f.arr) <= Date.parse(f.dep)) throw new Error(`${n}it lands before it leaves. Check the times.`);
+    const prev = flights[i - 1];
+    if (!prev) return;
+    if (prev.to !== f.from) throw new Error(`Flight ${i + 1} leaves from ${f.from}, but flight ${i} lands at ${prev.to}. Connecting flights must link up.`);
+    if (Date.parse(f.dep) <= Date.parse(prev.arr || prev.dep)) throw new Error(`Flight ${i + 1} leaves before flight ${i}${prev.arr ? ' lands' : ' leaves'}. Check the dates and times.`);
+    if (Date.parse(f.dep) - Date.parse(prev.dep) > 3 * DAY) throw new Error(`Flight ${i + 1} leaves more than 3 days after flight ${i}. Add it as a separate trip.`);
+  });
+}
 
 const clean = (v, max = 120) => String(v ?? '').trim().slice(0, max);
 const hash = (password, salt = randomBytes(16).toString('hex')) => `${salt}:${scryptSync(password, salt, 32).toString('hex')}`;
@@ -132,13 +155,9 @@ export class Accounts {
       arr: f.arr && !Number.isNaN(Date.parse(f.arr)) ? new Date(f.arr).toISOString() : null,
     }));
     if (!flights.length) throw new Error('Add at least one flight.');
-    flights.forEach((f, i) => {
-      if (!FLIGHT.test(f.id)) throw new Error(`Flight ${i + 1}: use a flight number like LH403.`);
-      if (!AIRPORT.test(f.from) || !AIRPORT.test(f.to)) throw new Error(`Flight ${i + 1}: use three-letter airport codes like FRA.`);
-      if (!f.dep) throw new Error(`Flight ${i + 1}: add the departure date and time.`);
-    });
     // The scenario's traveller gets the scenario's itinerary, because the scripted flight feed follows those flights.
     const live = email === this.scenario.traveller.email.toLowerCase();
+    if (!live) checkFlights(flights);
     const trip = live
       ? this.scenario.legs.map((id) => { const f = this.scenario.flights[id]; return { id: f.id, from: f.from, to: f.to, dep: f.sched_dep, arr: f.sched_arr }; })
       : flights;
@@ -155,6 +174,14 @@ export class Accounts {
     inv.token = randomBytes(9).toString('base64url');
     inv.expiresAt = Date.now() + INVITE_DAYS * 864e5;
     return { ...inv, registered: this.registrations.has(inv.email) };
+  }
+
+  // The traveller says the trip on the invite is not theirs: the travel manager is told.
+  dispute(b) {
+    const inv = this.invites.find((i) => i.token === clean(b.token, 40));
+    if (!inv) throw new Error('This invite link is not valid.');
+    inv.disputed = { at: Date.now(), note: clean(b.note, 300) };
+    return { ...inv };
   }
 
   remove(b) {

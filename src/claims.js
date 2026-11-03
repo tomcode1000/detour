@@ -7,7 +7,7 @@
 import { fmtMoney } from './agent/words.js';
 
 // [lat, lon, region, time zone]. Region EU covers the EU plus Iceland, Norway and Switzerland.
-const AIRPORTS = {
+export const AIRPORTS = {
   SIN: [1.364, 103.991, 'OTHER', 'Asia/Singapore'], FRA: [50.038, 8.562, 'EU', 'Europe/Berlin'], LHR: [51.47, -0.454, 'UK', 'Europe/London'],
   LGW: [51.153, -0.182, 'UK', 'Europe/London'], CDG: [49.01, 2.548, 'EU', 'Europe/Paris'], AMS: [52.31, 4.768, 'EU', 'Europe/Amsterdam'],
   MUC: [48.354, 11.786, 'EU', 'Europe/Berlin'], ZRH: [47.465, 8.549, 'EU', 'Europe/Zurich'], MAD: [40.472, -3.561, 'EU', 'Europe/Madrid'],

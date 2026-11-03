@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { Accounts } from '../src/accounts.js';
+import { Accounts, checkFlights } from '../src/accounts.js';
 
 const load = (p) => JSON.parse(readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
 const setup = () => {
@@ -9,7 +9,7 @@ const setup = () => {
   const scenario = load('scenarios/ada-frankfurt.json');
   return { policy, accounts: new Accounts({ policy, scenario }) };
 };
-const flight = { id: 'LH403', from: 'FRA', to: 'JFK', dep: '2026-11-12T08:30:00Z' };
+const flight = { id: 'LH403', from: 'FRA', to: 'JFK', dep: new Date(Date.now() + 7 * 864e5).toISOString() }; // always a week ahead
 
 test('the demo starts with the company and no trips', () => {
   const { accounts } = setup();
@@ -93,4 +93,24 @@ test('an invite can be sent again with a fresh link, or removed with its registr
   assert.equal(accounts.view().invites.length, 0);
   assert.throws(() => accounts.find({ email: 'lena@northwind.example' }), /no trip/);
   assert.equal(accounts.registrations.size, 0);
+});
+
+test('flights are checked: real airports, not in the past, and connections that link up', () => {
+  const now = Date.parse('2026-11-03T12:00:00Z');
+  const leg = (id, from, to, dep, arr) => ({ id, from, to, dep, arr });
+  assert.doesNotThrow(() => checkFlights([leg('SQ26', 'SIN', 'FRA', '2026-11-10T15:00:00Z', '2026-11-11T05:00:00Z'), leg('LH900', 'FRA', 'LHR', '2026-11-11T07:00:00Z')], now));
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'ZZZ', '2026-11-10T15:00:00Z')], now), /doesn't know the airport ZZZ/);
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'SIN', '2026-11-10T15:00:00Z')], now), /same airport/);
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-10-01T15:00:00Z')], now), /in the past/);
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z'), leg('XX2', 'MUC', 'LHR', '2026-11-11T07:00:00Z')], now), /must link up/);
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z', '2026-11-11T05:00:00Z'), leg('XX2', 'FRA', 'LHR', '2026-11-11T04:00:00Z')], now), /leaves before flight 1 lands/);
+  assert.throws(() => checkFlights([leg('XX1', 'SIN', 'FRA', '2026-11-10T15:00:00Z'), leg('XX2', 'FRA', 'LHR', '2026-11-20T07:00:00Z')], now), /separate trip/);
+});
+
+test('the traveller can say the trip is not theirs, and the manager sees it', () => {
+  const { accounts } = setup();
+  const inv = accounts.invite({ name: 'Lena Hart', email: 'lena@northwind.example', flights: [flight] });
+  accounts.dispute({ token: inv.token });
+  assert.ok(accounts.view().invites[0].disputed.at);
+  assert.ok(accounts.find({ token: inv.token }).disputed);
 });
