@@ -34,10 +34,13 @@ const emails = createEmails({ mailer, env, engine, accounts, baseUrl: () => env.
 const clients = new Set();
 let last = null;
 const broadcast = () => {
-  const now = state();
+  // A copy, not the live state: the engine's lists change in place, so comparing with the
+  // live object would never show what is new.
+  const json = JSON.stringify(state());
+  const now = JSON.parse(json);
   emails.onChange(last, now);
   last = now;
-  const data = `data: ${JSON.stringify(now)}\n\n`;
+  const data = `data: ${json}\n\n`;
   for (const res of clients) res.write(data);
 };
 engine.onChange(broadcast);
