@@ -1,7 +1,7 @@
 {
   "name": "Detour",
   "short_name": "Detour",
-  "description": "Money that follows a stranded traveller: meals, taxis and a hotel paid before they have to ask, inside company policy.",
+  "description": "An AI agent that pays a stranded traveller's meals, taxis and hotel the moment a flight is disrupted, inside company policy.",
   "id": "/app",
   "start_url": "/app",
   "scope": "/",

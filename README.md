@@ -1,6 +1,6 @@
 # Detour
 
-Money that follows a stranded traveller. When a business traveller's flight is cancelled or badly delayed, Detour gives them a virtual Airwallex card for meals and taxis, at that city's rate, before they have to ask. The card only works at restaurants and taxis, its limit grows or shrinks with the stay, and it closes when the trip ends. The hotel is paid directly to the hotel, so there is nothing to pay at the desk; later nights are scheduled and cancelled if the traveller gets home sooner, so money for days not stranded never leaves the company. Every payment comes from the company's own Airwallex balance, which the travel manager sees in the app. As the disruption changes, the agent changes the payments, and anything over policy goes to the travel manager with the evidence attached. When the trip ends, Detour works out what the airline owes and writes the claim.
+Detour is an AI agent that watches your flights and, the moment one is disrupted, pays for your meals, taxis and hotel on its own, inside your company's rules. It gives the traveller a virtual Airwallex card for restaurants and taxis, at that city's rate, and pays the hotel directly, so there is nothing to pay at the desk and no expense claim later. As the disruption changes, the agent changes the money: the card's limit follows the nights stranded, later hotel nights are scheduled and cancelled if the traveller gets home sooner, and anything over policy goes to the travel manager with the evidence attached. It reads the airline messages the traveller shares and refuses to act on one that doesn't match the flight status. When the trip ends it closes the card and writes the airline claim. Every payment comes from the company's own Airwallex balance, which the travel manager sees in the app.
 
 Built for the Airwallex Agentic Banking Hackathon (build period from 27 Oct 2026).
 
@@ -41,6 +41,9 @@ Settings in `.env` (git-ignored):
 | `FUNDING` | `meal-card` (default): meals and taxis on the traveller's Airwallex card, the hotel paid directly by Airwallex transfer. `meal-card-local`: the same, simulated. `hotel-card` / `hotel-card-local`: allowance by transfer, hotel nights on a hotels-only card. `transfers` / `transfers-local`: transfers only, the hotel paid by transfer. `cards` / `cards-local`: everything on one card. The app always shows which one is running |
 | `DEEPSEEK_API_KEY` | Turns on the DeepSeek agent. Without it, a keyword stand-in is used, and the app says so |
 | `DEEPSEEK_MODEL` | Default `deepseek-flash` |
+| `UNITPOST_API_KEY`, `MAIL_FROM` | Turn on email through UnitPost, e.g. `MAIL_FROM=Detour <trips@detour.quorumhq.xyz>` (the domain must be verified in UnitPost). Without them, Detour notifies in the app only |
+| `DEMO_INBOX` | Where emails to fictional demo addresses (`.example`) go. Without it they are skipped, so the sending domain never bounces |
+| `PUBLIC_URL` | The address used in email links once deployed, e.g. `https://detour.example.org` |
 
 ## How it is built
 
@@ -49,7 +52,8 @@ Settings in `.env` (git-ignored):
 - `src/funding/` holds the money side. `transfers.js` turns the rules' plan into payments: an allowance to the traveller (converted into their home currency by Airwallex), later days scheduled and cancelled when not needed, and hotel nights on the hotel card (issued when the first night is needed, limit raised or lowered as nights are approved or dropped, closed when the trip ends). `transfer-backends.js` sends transfers through Airwallex beneficiaries and transfers. `airwallex.js` is Airwallex Issuing (cardholders, cards, authorization controls, simulated authorizations), and `local.js` simulates a card with the same controls and decline reasons.
 - `src/claims.js` works out what the airline owes under EU261 or UK261: which law covers the journey (first departure to final arrival, and the airline's home region), the distance band, the delay, compensation for the traveller, and the meals, transport and hotel costs back to the company. It writes the claim letter.
 - `src/accounts.js` holds the company, the travel manager (password stored as a scrypt hash), invites and registrations. They live in memory and reset with the demo.
-- `src/agent/` holds the model side. The agent reads airline emails, understands the traveller and writes replies, using typed tools only. It never sees card numbers or keys.
+- `src/agent/` holds the model side (DeepSeek). The agent reads the airline messages a traveller shares, understands what the traveller asks for and writes every message they get, using typed tools only. It proposes; `src/rules.js` decides every amount, and anything over policy goes to the travel manager. It never sees card numbers or keys.
+- `src/notify/` sends the email copies of each moment (invite, card ready, hotel paid, decision needed, trip closed) through UnitPost.
 - `scenarios/ada-frankfurt.json` is the scripted demo: a missed connection in Frankfurt, a rebooking, a second night that is approved and then not needed, and the trip home. The flight feed is scripted; a real deployment would use a paid flight-status API.
 - `config/policy.json` holds the company policy and city rates. The rates are demo values.
 
