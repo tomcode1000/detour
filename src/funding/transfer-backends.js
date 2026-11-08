@@ -58,7 +58,18 @@ export function createAirwallexTransferBackend({ env, runKey }) {
         ...(toCurrency === currency ? { transfer_amount: amount } : { source_amount: amount }),
         ...(scheduleDays > 0 && { transfer_date: isoDate(Date.now() + scheduleDays * 864e5) }),
       };
-      const r = await call('POST', '/api/v1/transfers/create', body);
+      // The sandbox now and then answers "fee_unknown" for a transfer it accepts seconds later
+      // (seen 8 Nov 2026), so that one error gets two retries with the same request_id.
+      let r;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          r = await call('POST', '/api/v1/transfers/create', body);
+          break;
+        } catch (e) {
+          if (attempt >= 2 || !/fee_unknown/.test(e.message)) throw e;
+          await new Promise((ok) => setTimeout(ok, 1500));
+        }
+      }
       return { id: r.id, received: { amount: r.transfer_amount, currency: r.transfer_currency }, fee: r.fee_amount ?? null };
     },
 
