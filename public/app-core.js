@@ -1,6 +1,22 @@
 // Shared base for the Detour phone app (traveller and travel manager): helpers, icons, live state,
 // views and tabs, toasts and the route map.
 const $ = (id) => document.getElementById(id);
+// Live updates re-render screens many times a second while Detour is busy. Rebuilding a screen
+// whose HTML has not changed would replace its buttons between finger-down and finger-up and
+// lose the tap (an Approve tap was lost this way, 8 Nov 2026), so an unchanged screen is kept.
+(() => {
+  const d = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  Object.defineProperty(Element.prototype, 'innerHTML', {
+    configurable: true,
+    get() { return d.get.call(this); },
+    set(v) {
+      if (this.__html === v && d.get.call(this) === this.__ser) return;
+      d.set.call(this, v);
+      this.__html = v;
+      this.__ser = d.get.call(this);
+    },
+  });
+})();
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const params = new URLSearchParams(location.search);
 const EMBED = params.has('embed');
