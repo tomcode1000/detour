@@ -4,14 +4,25 @@ Detour is an AI agent that watches your flights and, the moment one is disrupted
 
 Built for the Airwallex Agentic Banking Hackathon (build period from 27 Oct 2026).
 
+## Live demo
+
+**https://54-255-109-186.sslip.io**, running on the Airwallex sandbox.
+
+- Start at `/demo` to see both phones side by side: set up the trip as the travel manager, accept it as the traveller, then play the disruption.
+- Or open `/app` on two phones, one as the travel manager and one as the traveller.
+
 ## Run it
 
 Needs Node 20 or newer. There are no dependencies to install.
 
 ```
+git clone https://github.com/tomcode1000/detour.git
+cd detour
 npm start          # http://localhost:4100
 npm test           # rules, accounts, claims and full-story tests
 ```
+
+To use the live Airwallex sandbox, put your keys in a `.env` file at the root (see the settings table below). Without Airwallex keys, set `FUNDING=meal-card-local` to run the same flow on a labelled local simulation.
 
 | Address | What it is |
 |---|---|
@@ -41,9 +52,24 @@ Settings in `.env` (git-ignored):
 | `FUNDING` | `meal-card` (default): meals and taxis on the traveller's Airwallex card, the hotel paid directly by Airwallex transfer. `meal-card-local`: the same, simulated. `hotel-card` / `hotel-card-local`: allowance by transfer, hotel nights on a hotels-only card. `transfers` / `transfers-local`: transfers only, the hotel paid by transfer. `cards` / `cards-local`: everything on one card. The app always shows which one is running |
 | `DEEPSEEK_API_KEY` | Turns on the DeepSeek agent. Without it, a keyword stand-in is used, and the app says so |
 | `DEEPSEEK_MODEL` | Default `deepseek-flash` |
-| `UNITPOST_API_KEY`, `MAIL_FROM` | Turn on email through UnitPost, e.g. `MAIL_FROM=Detour <trips@detour.quorumhq.xyz>` (the domain must be verified in UnitPost). Without them, Detour notifies in the app only |
+| `UNITPOST_API_KEY`, `MAIL_FROM` | Turn on email through UnitPost, e.g. `MAIL_FROM=Detour <trips@your-domain.com>` (the domain must be verified in UnitPost). Without them, Detour notifies in the app only |
 | `DEMO_INBOX` | Where emails to fictional demo addresses (`.example`) go. Without it they are skipped, so the sending domain never bounces |
 | `PUBLIC_URL` | The address used in email links once deployed, e.g. `https://detour.example.org` |
+
+## Deploy
+
+The live demo runs on one small AWS Lightsail server (Ubuntu 24.04, Singapore region). Detour is a single Node process that keeps its state in memory and streams live updates to the phones (Server-Sent Events), so it needs one server that stays on, not serverless hosting. Caddy sits in front and gets the HTTPS certificate.
+
+1. Create a Lightsail instance with **OS only → Ubuntu 24.04 LTS**, attach a static IP, and add an **HTTPS (443)** firewall rule.
+2. Pick an address that points at the static IP: your own domain, or for free, `<ip-with-dashes>.sslip.io`.
+3. In **Connect using SSH**:
+   ```
+   curl -fsSL https://raw.githubusercontent.com/tomcode1000/detour/master/deploy/lightsail-setup.sh -o setup.sh
+   bash setup.sh your.address
+   nano /opt/detour/.env            # paste the key values
+   sudo systemctl restart detour
+   ```
+4. To ship a new version later: `bash /opt/detour/deploy/update.sh`
 
 ## How it is built
 

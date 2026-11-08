@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time setup of Detour on a fresh AWS Lightsail Ubuntu 24.04 instance.
-# Run on the instance:  bash lightsail-setup.sh detour.quorumhq.xyz
+# Run on the instance:  bash lightsail-setup.sh your.address   (e.g. 54-255-109-186.sslip.io)
 # Installs Node 22 and Caddy (HTTPS from Let's Encrypt), clones the repo to /opt/detour and
 # runs it as a service on 127.0.0.1:4100 behind Caddy. Keys go in /opt/detour/.env, typed on
 # the server; this script never asks for them.
