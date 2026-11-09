@@ -11,6 +11,42 @@ Built for the Airwallex Agentic Banking Hackathon (build period from 27 Oct 2026
 - Start at `/demo` to see both phones side by side: set up the trip as the travel manager, accept it as the traveller, then play the disruption.
 - Or open `/app` on two phones, one as the travel manager and one as the traveller.
 
+## Try it in three minutes
+
+Open **https://54-255-109-186.sslip.io/demo** on a laptop. The left phone is Sam, the travel manager; the right phone is Ada, the traveller. The bar at the bottom tells you what to do next and plays the scripted flight feed.
+
+**1. Sam adds Ada's trip (left phone)**
+- Tap **Open the demo company** (or **Create company account** to sign up your own).
+- Go to **Trips** → **Add a trip and invite**. Tap **Use Ada's trip (demo)** to fill in her real itinerary (SIN → FRA → LHR, the flights the feed follows), or type it by hand: Ada Lim, `ada.lim@northwind.example`, DA779 SIN → FRA and DA908 FRA → LHR on 5 Nov 2026.
+- Tap **Create invite**. Detour shows the invite link and QR code.
+
+**2. Ada accepts (right phone)**
+- Enter `ada.lim@northwind.example` → **Continue**. Check the flights: **This is my trip** (or **This isn't my trip**, and Sam is told).
+- Add a mobile number, then date of birth and home address (what a card in her name needs; no bank details) → **Finish**.
+
+**3. Play the disruption (bottom bar)**
+- **Next event** (or key **N**) moves one step; **Play** (key **P**) runs until a decision is needed; **Reset** starts again.
+- Watch Ada's phone: her connection is missed, her **Detour card** (€120, meals and taxis only) appears, dinner is approved, headphones are declined by the card's merchant rule, the hotel is paid directly, and a fake refund message is flagged as a scam.
+- When night 2 is over policy, Sam's phone shows **Decision required** → **Review request** → **Approve** (or Decline). Press **Play** again: an earlier seat opens, night 2 is cancelled before it is paid, the card closes when Ada lands, and the airline claim is written.
+
+**Where things are in the apps**
+
+| Travel manager (Sam) | |
+|---|---|
+| Home | Active trips, disruptions, what is paid, the live company balance from Airwallex, decisions waiting |
+| Approvals | Requests outside policy, each with the flight status and airline message attached |
+| Trips | Every trip; open Ada's to see her route, payments and the airline claim (mark it sent, then settled) |
+| More | Payments, Travel policy (edit the rules), Decision log (every decision by Sam and by Detour), Add a trip, Notifications, Switch role, Sign out |
+
+| Traveller (Ada) | |
+|---|---|
+| Home | Trip status, her Detour card, the hotel, what is covered; **Share an airline message** |
+| Trips | Route map, flights, what is covered, the airline claim and the airline messages she received |
+| Messages | Talk to Detour (ask for more, report a problem); airline messages she shares are read here |
+| More | Edit your details, Notifications, Switch role, Sign out |
+
+The demo has one shared state: if someone else is playing it, press **Reset** to start from the beginning. Payments are real Airwallex sandbox calls; the flight feed, people and airline are fictional.
+
 ## Run it
 
 Needs Node 20 or newer. There are no dependencies to install.
