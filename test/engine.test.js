@@ -110,3 +110,14 @@ test('a request for something Detour does not pay for is refused', async () => {
   assert.match(e.messages.at(-1).text, /Sorry/);
   assert.equal(e.approvals.length, 0);
 });
+
+test('a decision that arrives while Detour is busy waits its turn and is applied', async () => {
+  const e = engine();
+  await playUntil(e, (x) => x.approvals.some((a) => a.status === 'PENDING'));
+  const id = e.approvals.find((a) => a.status === 'PENDING').id;
+  e.busy = true;
+  setTimeout(() => { e.busy = false; }, 300);
+  await e.decide(id, 'approve');
+  assert.equal(e.approvals.find((a) => a.id === id).status, 'APPROVED');
+  await assert.rejects(e.decide(id, 'approve'), /already approved/);
+});

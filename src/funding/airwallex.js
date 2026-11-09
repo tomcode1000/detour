@@ -115,7 +115,15 @@ export function createAirwallexFunding({ env, clock }) {
       if (incrementOf && lastTx.has(incrementOf)) body.transaction_id = lastTx.get(incrementOf);
       const at = clock();
       try {
-        const r = await call('POST', '/api/v1/simulation/issuing/create', body);
+        // The sandbox simulator now and then answers "failed to process transaction" for a charge
+        // it handles fine a moment later (seen 9 Nov 2026); that is not a decline, so retry it.
+        let r;
+        for (let attempt = 0; ; attempt++) {
+          try { r = await call('POST', '/api/v1/simulation/issuing/create', body); break; } catch (e) {
+            if (attempt >= 2 || !/failed to process transaction/.test(e.message)) throw e;
+            await new Promise((ok) => setTimeout(ok, 1500));
+          }
+        }
         if (label && r.transaction_id) lastTx.set(label, r.transaction_id);
         // Builder guide: treat CLEARING as accepted and use failure_reason for a decline.
         const reason = r.failure_reason || (r.status === 'FAILED' ? 'DECLINED' : null);

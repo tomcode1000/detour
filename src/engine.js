@@ -385,8 +385,13 @@ export class Engine {
   }
 
   async decide(id, decision) {
+    // A decision that arrives while Detour is busy (say, reading the traveller's message) waits
+    // its turn instead of being dropped: the manager's phone already says "approved".
+    for (let i = 0; this.busy && i < 600; i++) await new Promise((ok) => setTimeout(ok, 100));
     const a = this.approvals.find((x) => x.id === id);
-    if (!a || a.status !== 'PENDING' || this.busy) return false;
+    if (!a) throw new Error('That request no longer exists.');
+    if (a.status !== 'PENDING') throw new Error(`That request is already ${a.status.toLowerCase()}.`);
+    if (this.busy) throw new Error('Detour is still busy. Try again in a moment.');
     this.busy = true;
     this.doing(`Applying ${this.policy.travel_manager}'s decision`);
     try {
