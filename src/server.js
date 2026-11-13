@@ -97,6 +97,19 @@ const actions = {
   }) : null),
 };
 
+// The demo is one shared story. If the last visitor left it part-way or finished and nobody has
+// touched it for a while, put it back to the start so the next visitor begins at the beginning.
+const IDLE_RESET_MS = Number(env.IDLE_RESET_MINUTES || 20) * 60e3;
+let lastTouch = Date.now();
+let dirty = false;
+setInterval(() => {
+  if (!dirty || engine.busy || engine.playing || Date.now() - lastTouch < IDLE_RESET_MS) return;
+  dirty = false;
+  accounts.reset();
+  engine.reset();
+  console.log('Demo reset after being left idle');
+}, 60e3).unref();
+
 let balanceCache = null;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -122,6 +135,8 @@ const server = http.createServer(async (req, res) => {
 
   const action = actions[`${req.method} ${url.pathname}`];
   if (action) {
+    lastTouch = Date.now();
+    dirty = url.pathname !== '/api/reset';
     try {
       const result = await action(await readBody(req));
       return send(res, 200, { ok: true, result: result ?? null });

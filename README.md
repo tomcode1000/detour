@@ -45,7 +45,7 @@ Open **https://54-255-109-186.sslip.io/demo** on a laptop. The left phone is Sam
 | Messages | Talk to Detour (ask for more, report a problem); airline messages she shares are read here |
 | More | Edit your details, Notifications, Switch role, Sign out |
 
-The demo has one shared state: if someone else is playing it, press **Reset** to start from the beginning. Payments are real Airwallex sandbox calls; the flight feed, people and airline are fictional.
+The demo has one shared state: if someone else is playing it, press **Reset** to start from the beginning. If nobody touches it for 20 minutes, it resets on its own, so you normally arrive at the start. Payments are real Airwallex sandbox calls; the flight feed, people and airline are fictional.
 
 ## Run it
 
@@ -91,6 +91,7 @@ Settings in `.env` (git-ignored):
 | `UNITPOST_API_KEY`, `MAIL_FROM` | Turn on email through UnitPost, e.g. `MAIL_FROM=Detour <trips@your-domain.com>` (the domain must be verified in UnitPost). Without them, Detour notifies in the app only |
 | `DEMO_INBOX` | Where emails to fictional demo addresses (`.example`) go. Without it they are skipped, so the sending domain never bounces |
 | `PUBLIC_URL` | The address used in email links once deployed, e.g. `https://detour.example.org` |
+| `IDLE_RESET_MINUTES` | Default `20`. The shared demo goes back to the start after this long with nobody using it |
 
 ## Deploy
 
@@ -111,7 +112,7 @@ The live demo runs on one small AWS Lightsail server (Ubuntu 24.04, Singapore re
 
 - `src/rules.js` sets every number: when a trip counts as disrupted, nights stranded (23:00 local cut-offs), limits, merchant codes, expiry, and when the travel manager must approve. The model can only propose.
 - `src/engine.js` plays the trip's events (flight feed, airline emails, traveller messages, merchant charges) and keeps the money in line with the rules.
-- `src/funding/` holds the money side. `transfers.js` turns the rules' plan into payments: an allowance to the traveller (converted into their home currency by Airwallex), later days scheduled and cancelled when not needed, and hotel nights on the hotel card (issued when the first night is needed, limit raised or lowered as nights are approved or dropped, closed when the trip ends). `transfer-backends.js` sends transfers through Airwallex beneficiaries and transfers. `airwallex.js` is Airwallex Issuing (cardholders, cards, authorization controls, simulated authorizations), and `local.js` simulates a card with the same controls and decline reasons.
+- `src/funding/` holds the money side. `combined.js` is the default mode: meals and taxis on the traveller's Detour card (limit set to the nights stranded, restaurants and taxis only, closed when the trip ends), and each hotel night paid directly to the hotel by transfer, scheduled for check-in and cancelled if not needed. `transfers.js` turns the rules' plan into payments: an allowance to the traveller (converted into their home currency by Airwallex), later days scheduled and cancelled when not needed, and hotel nights on the hotel card (issued when the first night is needed, limit raised or lowered as nights are approved or dropped, closed when the trip ends). `transfer-backends.js` sends transfers through Airwallex beneficiaries and transfers. `airwallex.js` is Airwallex Issuing (cardholders, cards, authorization controls, simulated authorizations), and `local.js` simulates a card with the same controls and decline reasons.
 - `src/claims.js` works out what the airline owes under EU261 or UK261: which law covers the journey (first departure to final arrival, and the airline's home region), the distance band, the delay, compensation for the traveller, and the meals, transport and hotel costs back to the company. It writes the claim letter.
 - `src/accounts.js` holds the company, the travel manager (password stored as a scrypt hash), invites and registrations. They live in memory and reset with the demo.
 - `src/agent/` holds the model side (DeepSeek). The agent reads the airline messages a traveller shares, understands what the traveller asks for and writes every message they get, using typed tools only. It proposes; `src/rules.js` decides every amount, and anything over policy goes to the travel manager. It never sees card numbers or keys.
@@ -125,4 +126,4 @@ Airlines write to the traveller, not to Detour. Messages land in the traveller a
 
 ## Status
 
-Runs live on the Airwallex sandbox (Singapore account). Tested end to end on 3 Nov 2026 with the default `meal-card` mode: Ada's card issued for meals and taxis (EUR 120, raised to EUR 180 when she has to stay), a EUR 18.40 dinner approved, EUR 399 of headphones declined by the card's merchant rule, the hotel paid directly by transfer for night 1, night 2 scheduled after approval and cancelled when an earlier seat opened, the card closed when she landed, and a UK261 claim: 520 GBP for her and 198.40 EUR of care costs back to the company. The company balance is read live from Airwallex. The `hotel-card` and `transfers` modes were tested live on 1 Nov 2026.
+Runs live on the Airwallex sandbox (Singapore account). Tested end to end on 3 Nov 2026 with the default `meal-card` mode: Ada's card issued for meals and taxis (EUR 120, raised to EUR 180 when she has to stay), a EUR 18.40 dinner approved, EUR 399 of headphones declined by the card's merchant rule, the hotel paid directly by transfer for night 1, night 2 scheduled after approval and cancelled when an earlier seat opened, the card closed when she landed, and a UK261 claim: 520 GBP for her and 198.40 EUR of care costs back to the company. The company balance is read live from Airwallex. The whole story ran live again on 9 Nov 2026 for the demo video. The `hotel-card` and `transfers` modes were tested live on 1 Nov 2026.
