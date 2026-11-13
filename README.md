@@ -29,6 +29,9 @@ Open **https://54-255-109-186.sslip.io/demo** on a laptop. The left phone is Sam
 - Watch Ada's phone: her connection is missed, her **Detour card** (€120, meals and taxis only) appears, dinner is approved, headphones are declined by the card's merchant rule, the hotel is paid directly, and a fake refund message is flagged as a scam.
 - When night 2 is over policy, Sam's phone shows **Decision required** → **Review request** → **Approve** (or Decline). Press **Play** again: an earlier seat opens, night 2 is cancelled before it is paid, the card closes when Ada lands, and the airline claim is written.
 
+**4. Add a real flight (optional, left phone)**
+- **Trips** → **Add a trip and invite**, with any traveller name and email and a real flight in the next few days (for example BA117 LHR → JFK). Detour checks it with live flight status, refuses a flight that doesn't fly that day, and shows the real status and delay on the trip.
+
 **Where things are in the apps**
 
 | Travel manager (Sam) | |

@@ -106,7 +106,7 @@
           <div id="h-decisions"></div>
           <div class="section-head"><h2>Active trips</h2><button data-go="trips">View all <svg class="i"><use href="#i-arrow"/></svg></button></div>
           <div class="list" id="h-trips"></div>
-          <p class="fine">Demo company: scripted flight feed and fictional people. Payments run in the Airwallex sandbox.</p>
+          <p class="fine">Demo company: fictional people, and Ada’s trip replays a scripted disruption. Trips you add with real flights are followed live. Payments run in the Airwallex sandbox.</p>
         </section>
 
         <!-- Approvals -->
@@ -152,7 +152,7 @@
             <div class="section-head"><h2>Flights</h2></div>
             <div class="list" id="inv-flights"></div>
             <button type="button" class="add-line" id="inv-add"><svg class="i"><use href="#i-plus"/></svg>Add another flight</button>
-            <div class="note"><svg class="i"><use href="#i-shield-o"/></svg><span>Detour checks the airport codes, the dates, and that connections leave from where the last flight landed, and the traveller confirms the trip when they open the invite. A live version also checks each flight with a flight-status service.</span></div>
+            <div class="note"><svg class="i"><use href="#i-shield-o"/></svg><span>Detour checks the airport codes, the dates, and that connections leave from where the last flight landed, and checks each flight with live flight status: it must really fly that day from that airport. Detour then follows it until it lands, and the traveller confirms the trip when they open the invite.</span></div>
             <p class="form-error" id="inv-error"></p>
             <button class="btn primary block" type="submit"><svg class="i"><use href="#i-send"/></svg>Create invite</button>
           </form>
