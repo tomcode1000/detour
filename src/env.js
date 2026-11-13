@@ -16,7 +16,7 @@ export function loadEnv(file = path.join(ROOT, '.env')) {
   }
   const merged = { ...fromFile };
   for (const key of Object.keys(fromFile)) if (process.env[key]) merged[key] = process.env[key];
-  for (const key of ['FUNDING', 'AGENT', 'PORT', 'DEEPSEEK_MODEL', 'DEEPSEEK_API_KEY', 'IDLE_RESET_MINUTES']) {
+  for (const key of ['FUNDING', 'AGENT', 'PORT', 'DEEPSEEK_MODEL', 'DEEPSEEK_API_KEY', 'IDLE_RESET_MINUTES', 'AERODATABOX_KEY']) {
     if (process.env[key]) merged[key] = process.env[key];
   }
   return merged;

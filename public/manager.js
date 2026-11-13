@@ -172,6 +172,16 @@ function momentsFor(a, b) {
     }
   }
 
+  // A real trip's flight is cancelled, diverted or badly delayed (live flight status).
+  for (const i of b.account?.invites || []) {
+    const was = (a.account?.invites || []).find((x) => x.token === i.token);
+    for (const f of i.flights || []) {
+      if (!f.live?.disrupted || !was || was.flights.find((x) => x.id === f.id)?.live?.disrupted) continue;
+      const what = f.live.status === 'CANCELLED' ? 'is cancelled' : f.live.status === 'DIVERTED' ? 'is diverted' : `is ${Math.round(f.live.delayMin / 6) / 10}h late`;
+      moment({ tone: 'warn', icon: 'warn', title: `${i.name.split(' ')[0]}'s flight ${f.id} ${what}`, sub: 'Detour spotted it in the live flight status. In this demo, payments for real trips are switched off: Ada’s trip shows what Detour does next.', primary: { label: 'Open the trip', go: 'trips' }, secondary: { label: 'Later' } });
+    }
+  }
+
   for (const m of b.inbox || []) {
     const old = (a.inbox || []).find((x) => x.id === m.id);
     if (m.verdict === 'suspicious' && old?.verdict !== 'suspicious') toast(`Detour caught a fake airline message sent to ${first()}. Nothing was paid.`);
@@ -326,16 +336,24 @@ function renderTrip() {
   } else {
     const i = (S.account?.invites || []).find((x) => x.token === openTrip);
     if (!i) return;
-    legs = i.flights.map((f) => ({ id: f.id, from: f.from, to: f.to, dep: Date.parse(f.dep), status: 'SCHEDULED', statusText: 'on time' }));
+    legs = i.flights.map((f) => ({ id: f.id, from: f.from, to: f.to, dep: f.live?.est_dep || Date.parse(f.dep), status: f.live?.status || 'SCHEDULED', live: f.live || null }));
     who = `<span class="avatar lg">${esc(initials(i.name))}</span><div><b>${esc(i.name)}</b><small>${esc(i.email)} · ${i.registered ? 'Registered' : 'Invited'}</small></div>`;
   }
   const disputed = (openTrip === 'live' ? liveInvite() : (S.account?.invites || []).find((x) => x.token === openTrip))?.disputed;
   $('tr-who').innerHTML = who;
   $('tr-flag').innerHTML = disputed ? `<div class="banner warn"><span class="badge">${icon('warn')}</span><div class="grow"><b>The traveller says this isn't their trip</b><small>Remove it and add the right flights. They get a new invite.</small></div></div>` : '';
   const d = openTrip === 'live' ? S.disruption : null;
-  const state = (l) => (l.status === 'LANDED' || l.status === 'DEPARTED' ? 'done' : l.status === 'CANCELLED' || d?.missedFlight === l.id ? 'broken' : 'next');
+  const state = (l) => (l.status === 'LANDED' || l.status === 'DEPARTED' ? 'done' : l.status === 'CANCELLED' || l.live?.disrupted || d?.missedFlight === l.id ? 'broken' : 'next');
+  // Real trips: what the flight status service says right now.
+  const liveNote = (l) => {
+    if (!l.live) return openTrip !== 'live' && S.flightFeed ? ' · waiting for live status' : '';
+    const late = l.live.delayMin >= 15 ? ` · ${Math.floor(l.live.delayMin / 60) ? `${Math.floor(l.live.delayMin / 60)}h ` : ''}${l.live.delayMin % 60}m late` : '';
+    const what = { CANCELLED: ' · cancelled', DIVERTED: ' · diverted', LANDED: ' · landed', DEPARTED: ' · in the air' }[l.live.status] || (late || ' · on time');
+    return `${what} · live, checked ${esc(dateHm(l.live.checkedAt, tzOf(l.from)).split(' ').at(-1))}`;
+  };
+  const pill = (l) => (state(l) === 'broken' ? '<span class="pill bad">Disrupted</span>' : state(l) === 'done' ? '<span class="pill plain">Flown</span>' : l.status === 'DELAYED' ? '<span class="pill warn">Delayed</span>' : '<span class="pill ok">Scheduled</span>');
   if (currentView === 'trip') drawRoute($('tr-map'), legs.map((l) => ({ from: l.from, to: l.to, state: state(l) })), { stay });
-  $('tr-legs').innerHTML = legs.map((f) => `<div class="row"><span class="ic plain">${icon('plane')}</span><div class="grow"><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>Departs ${esc(dateHm(f.dep, tzOf(f.from)))}</small></div>${state(f) === 'broken' ? '<span class="pill bad">Disrupted</span>' : state(f) === 'done' ? '<span class="pill plain">Flown</span>' : '<span class="pill ok">Scheduled</span>'}</div>`).join('');
+  $('tr-legs').innerHTML = legs.map((f) => `<div class="row"><span class="ic plain">${icon('plane')}</span><div class="grow"><b>${esc(f.id)} · ${esc(f.from)} → ${esc(f.to)}</b><small>Departs ${esc(dateHm(f.dep, tzOf(f.from)))}${liveNote(f)}</small></div>${pill(f)}</div>`).join('') + (openTrip !== 'live' && S.flightFeed ? `<p class="fine" style="margin:8px 14px">Followed live by ${esc(S.flightFeed)}, from a day before each flight until it lands.</p>` : openTrip === 'live' ? '<p class="fine" style="margin:8px 14px">Ada’s trip replays a scripted disruption, so the whole story can be seen on cue.</p>' : '');
   $('tr-claim').innerHTML = openTrip === 'live' ? claimRow(S.claim) : '';
   // Invites can be sent again (a fresh link) or removed. Ada's trip stays once the demo story is running.
   const inv = openTrip === 'live' ? liveInvite() : (S.account?.invites || []).find((x) => x.token === openTrip);

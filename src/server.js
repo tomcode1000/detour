@@ -10,6 +10,7 @@ import { createAgent } from './agent/index.js';
 import { Accounts } from './accounts.js';
 import { createMailer } from './notify/mailer.js';
 import { createEmails } from './notify/emails.js';
+import { createFlightStatus, localDate } from './flights/aerodatabox.js';
 
 const env = loadEnv();
 const load = (p) => JSON.parse(readFileSync(path.join(ROOT, p), 'utf8'));
@@ -24,7 +25,8 @@ const engine = new Engine({
 });
 
 const accounts = new Accounts({ policy, scenario });
-const state = () => ({ ...engine.snapshot(), account: accounts.view() });
+const flightStatus = createFlightStatus(env, { delayThresholdH: policy.rules.delay_threshold_hours });
+const state = () => ({ ...engine.snapshot(), account: accounts.view(), flightFeed: flightStatus ? flightStatus.name : null });
 
 // Links in emails point at the address people use to reach this server (PUBLIC_URL wins).
 let origin = env.PUBLIC_URL || `http://localhost:${env.PORT || 4100}`;
@@ -63,6 +65,44 @@ const send = (res, code, body) => {
   res.end(JSON.stringify(body));
 };
 
+// Trips the travel manager adds (not Ada's scripted demo trip) are checked against the real flight
+// status service, when it is turned on: the flight must exist that day and leave from that airport.
+// If the service itself can't be reached, the trip is still added and the check is tried again later.
+async function checkRealFlights(inv) {
+  if (!flightStatus || inv.live) return;
+  for (const f of inv.flights) {
+    let s;
+    try { s = await flightStatus.lookup(f.id, Date.parse(f.dep), f.from); } catch { continue; }
+    const day = localDate(Date.parse(f.dep), f.from);
+    if (!s) throw new Error(`${f.id} doesn't fly on ${day}, according to the flight status service. Check the flight number and date.`);
+    if (s.wrongRoute) throw new Error(`${f.id} on ${day} flies ${s.from} → ${s.to}, not from ${f.from}. Check the flight.`);
+    f.live = s;
+  }
+}
+
+// Follow real trips' flights from a day before departure until they land.
+async function watchRealFlights() {
+  if (!flightStatus) return;
+  let changed = false;
+  for (const inv of accounts.invites) {
+    if (inv.live) continue;
+    for (const f of inv.flights) {
+      const dep = Date.parse(f.dep);
+      const end = (f.arr ? Date.parse(f.arr) : dep + 18 * 3600e3) + 6 * 3600e3;
+      if (Date.now() < dep - 24 * 3600e3 || Date.now() > end || f.live?.status === 'LANDED') continue;
+      try {
+        const s = await flightStatus.lookup(f.id, dep, f.from);
+        if (!s || s.wrongRoute) continue;
+        if (JSON.stringify({ ...s, checkedAt: 0 }) !== JSON.stringify({ ...f.live, checkedAt: 0 })) changed = true;
+        if (s.disrupted && !f.live?.disrupted) console.log(`Real flight disrupted: ${f.id} ${s.status}`);
+        f.live = s;
+      } catch (e) { console.log(`Flight status: ${e.message}`); }
+    }
+  }
+  if (changed) broadcast();
+}
+setInterval(watchRealFlights, 10 * 60e3).unref();
+
 // The story starts once the travel manager has added Ada's trip and she has finished registering.
 const needsTraveller = () => {
   if (!accounts.liveReady()) throw new Error("Set up Ada first: add her trip on Sam's phone, then finish registering on Ada's phone.");
@@ -79,7 +119,11 @@ const actions = {
   'POST /api/signup': (b) => { const r = accounts.signup(b); broadcast(); return r; },
   'POST /api/signin': (b) => accounts.signin(b),
   'POST /api/policy': (b) => { const r = accounts.updatePolicy(b); broadcast(); return r; },
-  'POST /api/invite': (b) => { const r = accounts.invite(b); broadcast(); emails.invite(r).then(broadcast); return r; },
+  'POST /api/invite': async (b) => {
+    const r = accounts.invite(b);
+    try { await checkRealFlights(r); } catch (e) { accounts.remove({ token: r.token }); throw e; }
+    broadcast(); emails.invite(r).then(broadcast); return r;
+  },
   'POST /api/invite/renew': (b) => { const r = accounts.renew(b); broadcast(); emails.invite(r).then(broadcast); return r; },
   'POST /api/invite/remove': (b) => {
     const inv = accounts.invites.find((i) => i.token === b.token);
@@ -163,4 +207,5 @@ server.listen(port, () => {
   const snap = engine.snapshot();
   console.log(`Detour running at http://localhost:${port}`);
   console.log(`Funding: ${snap.adapters.funding}   Agent: ${snap.adapters.agent}   Email: ${mailer ? `UnitPost (${mailer.from})` : 'off'}`);
+  console.log(`Real flight status: ${flightStatus ? flightStatus.name : 'off (set AERODATABOX_KEY)'}`);
 });

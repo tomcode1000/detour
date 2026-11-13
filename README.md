@@ -74,7 +74,7 @@ The phone app is a Progressive Web App (manifest, icons, service worker): on And
 
 ### The flow
 
-1. The travel manager signs up the company (or opens the demo company) and adds a trip: the traveller's name, email and flights. Detour checks the airport codes, that no flight is in the past, that flights are in time order, and that connections link up: flights less than a day apart must leave from where the last one landed, while a longer gap is a stay, so a return days later or a flight home from another city is fine. It does not yet check that a flight number really flies that day: a live version would ask a flight-status service (FlightAware, Cirium, AeroDataBox) and then follow the flights through it, in place of the scripted feed.
+1. The travel manager signs up the company (or opens the demo company) and adds a trip: the traveller's name, email and flights. Detour checks the airport codes, that no flight is in the past, that flights are in time order, and that connections link up: flights less than a day apart must leave from where the last one landed, while a longer gap is a stay, so a return days later or a flight home from another city is fine. With a flight-status key (`AERODATABOX_KEY`), it also checks that each flight number really flies that day from that airport, then follows the flights live from a day before departure until they land: the trip shows the real status and how late each flight is, and the travel manager is alerted when one is cancelled, diverted or more than 2 hours late. Ada's demo trip keeps its scripted feed, so the whole disruption can be seen on cue; payments run on that story, not on real trips.
 2. Detour makes an invite link and QR code. The manager can send it again (a fresh link) or remove the trip.
 3. The traveller opens Detour with that email and checks the trip. If the flights are not theirs, they tap "This isn't my trip" and the manager is told. Otherwise they add a mobile number, then the date of birth and home address a card in their name needs (no bank account), and see the route on a map.
 4. When a flight is disrupted, money moves on its own within policy. Anything over policy waits for the manager's approval.
@@ -91,6 +91,7 @@ Settings in `.env` (git-ignored):
 | `UNITPOST_API_KEY`, `MAIL_FROM` | Turn on email through UnitPost, e.g. `MAIL_FROM=Detour <trips@your-domain.com>` (the domain must be verified in UnitPost). Without them, Detour notifies in the app only |
 | `DEMO_INBOX` | Where emails to fictional demo addresses (`.example`) go. Without it they are skipped, so the sending domain never bounces |
 | `PUBLIC_URL` | The address used in email links once deployed, e.g. `https://detour.example.org` |
+| `AERODATABOX_KEY` | RapidAPI key for AeroDataBox. Checks real flights when a trip is added and follows them live. Without it, Detour checks airports, dates and connections only |
 | `IDLE_RESET_MINUTES` | Default `20`. The shared demo goes back to the start after this long with nobody using it |
 
 ## Deploy
@@ -116,8 +117,9 @@ The live demo runs on one small AWS Lightsail server (Ubuntu 24.04, Singapore re
 - `src/claims.js` works out what the airline owes under EU261 or UK261: which law covers the journey (first departure to final arrival, and the airline's home region), the distance band, the delay, compensation for the traveller, and the meals, transport and hotel costs back to the company. It writes the claim letter.
 - `src/accounts.js` holds the company, the travel manager (password stored as a scrypt hash), invites and registrations. They live in memory and reset with the demo.
 - `src/agent/` holds the model side (DeepSeek). The agent reads the airline messages a traveller shares, understands what the traveller asks for and writes every message they get, using typed tools only. It proposes; `src/rules.js` decides every amount, and anything over policy goes to the travel manager. It never sees card numbers or keys.
+- `src/flights/aerodatabox.js` reads real flight status (scheduled, revised and actual times, cancelled, diverted) for trips the travel manager adds, asking about each flight at most every 15 minutes.
 - `src/notify/` sends the email copies of each moment (invite, card ready, hotel paid, decision needed, trip closed) through UnitPost.
-- `scenarios/ada-frankfurt.json` is the scripted demo: a missed connection in Frankfurt, a rebooking, a second night that is approved and then not needed, and the trip home. The flight feed is scripted; a real deployment would use a paid flight-status API.
+- `scenarios/ada-frankfurt.json` is the scripted demo: a missed connection in Frankfurt, a rebooking, a second night that is approved and then not needed, and the trip home. The flight feed for this story is scripted; trips the travel manager adds are followed live when `AERODATABOX_KEY` is set.
 - `config/policy.json` holds the company policy and city rates. The rates are demo values.
 
 ## Airline messages

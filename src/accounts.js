@@ -14,7 +14,7 @@ const DAY = 864e5;
 // not in the past, flights in time order, and connections that link up. Flights less than 24 hours
 // apart are a connection, so the next one must leave from where the last one landed. A longer gap is
 // a stay (a return days later, or home from another city), so it may leave from anywhere.
-// A live version would also ask a flight-status service that each flight exists on that date.
+// With AERODATABOX_KEY, the server also asks the flight status service that each flight exists that day.
 export function checkFlights(flights, now = Date.now()) {
   flights.forEach((f, i) => {
     const n = flights.length > 1 ? `Flight ${i + 1}: ` : '';
